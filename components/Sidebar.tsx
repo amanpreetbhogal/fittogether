@@ -20,7 +20,10 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { profile, user, signOut } = useAuth()
 
-  const displayName = profile?.display_name ?? user?.user_metadata?.display_name ?? 'FitTogether User'
+  const metadataDisplayName = typeof user?.user_metadata?.display_name === 'string'
+    ? user.user_metadata.display_name
+    : null
+  const displayName = profile?.display_name ?? metadataDisplayName ?? 'FitTogether User'
   const initials = displayName
     .split(' ')
     .filter(Boolean)
