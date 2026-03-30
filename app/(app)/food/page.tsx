@@ -1,18 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, Flame, X } from 'lucide-react'
+import { useAuth } from '@/components/auth/AuthProvider'
+import type { Database } from '@/lib/database.types'
+import { supabase } from '@/lib/supabase'
 
 interface FoodResult {
-  product_name: string
-  brands?: string
-  nutriments: {
-    'energy-kcal_100g'?: number
-    proteins_100g?: number
-    carbohydrates_100g?: number
-    fat_100g?: number
-  }
-  serving_size?: string
+  id: string
+  name: string
+  brand?: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  fiber?: number
+  sugar?: number
+  sodium?: number
+  servingAmount: number
+  servingUnit: string
+  servingDescription: string
 }
 
 interface LoggedFood {
@@ -26,61 +33,161 @@ interface LoggedFood {
   meal: string
 }
 
-const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+type FoodEntryRow = Database['public']['Tables']['food_entries']['Row']
+type MealType = Database['public']['Enums']['meal_type']
 
-const mockLoggedFoods: LoggedFood[] = [
-  { id: '1', name: 'Greek Yogurt', brand: 'Chobani', calories: 130, protein: 17, carbs: 9, fat: 2, meal: 'Breakfast' },
-  { id: '2', name: 'Banana', calories: 105, protein: 1, carbs: 27, fat: 0, meal: 'Breakfast' },
-  { id: '3', name: 'Chicken Breast', brand: 'Tyson', calories: 165, protein: 31, carbs: 0, fat: 4, meal: 'Lunch' },
-  { id: '4', name: 'Brown Rice', calories: 216, protein: 5, carbs: 45, fat: 2, meal: 'Lunch' },
-]
+const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const
+const MEAL_TYPE_TO_DB: Record<typeof MEAL_TYPES[number], MealType> = {
+  Breakfast: 'breakfast',
+  Lunch: 'lunch',
+  Dinner: 'dinner',
+  Snack: 'snack',
+}
+const DB_TO_MEAL_TYPE: Record<MealType, typeof MEAL_TYPES[number]> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snack: 'Snack',
+}
 
 export default function FoodPage() {
+  const { user, loading: authLoading } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodResult[]>([])
   const [searching, setSearching] = useState(false)
-  const [loggedFoods, setLoggedFoods] = useState<LoggedFood[]>(mockLoggedFoods)
+  const [hasSearched, setHasSearched] = useState(false)
+  const [loggedFoods, setLoggedFoods] = useState<LoggedFood[]>([])
   const [selectedMeal, setSelectedMeal] = useState('Breakfast')
   const [addingFood, setAddingFood] = useState<FoodResult | null>(null)
-  const [servingSize, setServingSize] = useState('100')
+  const [servingSize, setServingSize] = useState('1')
+  const [loadingFoods, setLoadingFoods] = useState(true)
+  const [savingFood, setSavingFood] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadFoods = async () => {
+      if (!user) {
+        setLoggedFoods([])
+        setLoadingFoods(false)
+        return
+      }
+
+      setLoadingFoods(true)
+
+      const { data, error } = await supabase
+        .from('food_entries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to load food entries', error)
+        setErrorMessage('Could not load your food log right now.')
+        setLoggedFoods([])
+        setLoadingFoods(false)
+        return
+      }
+
+      setLoggedFoods(data.map(mapFoodEntryToLoggedFood))
+      setLoadingFoods(false)
+    }
+
+    if (!authLoading) {
+      void loadFoods()
+    }
+  }, [authLoading, user])
 
   const searchFood = async () => {
     if (!query.trim()) return
     setSearching(true)
+    setHasSearched(true)
+    setErrorMessage(null)
     try {
-      const res = await fetch(
-        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size`
-      )
+      const res = await fetch(`/api/foods/search?q=${encodeURIComponent(query)}`)
       const data = await res.json()
-      const products = (data.products || []).filter((p: FoodResult) => p.product_name && p.nutriments)
-      setResults(products)
+
+      if (!res.ok) {
+        setResults([])
+        setErrorMessage(
+          typeof data?.error === 'string'
+            ? data.error
+            : 'Food search failed right now. Please try again in a moment.'
+        )
+        return
+      }
+
+      setResults(Array.isArray(data.results) ? data.results : [])
     } catch {
       setResults([])
+      setErrorMessage('Food search failed right now. Please try again in a moment.')
     } finally {
       setSearching(false)
     }
   }
 
-  const confirmAdd = (food: FoodResult) => {
-    const factor = parseFloat(servingSize) / 100
-    const entry: LoggedFood = {
-      id: Date.now().toString(),
-      name: food.product_name,
-      brand: food.brands,
-      calories: Math.round((food.nutriments['energy-kcal_100g'] || 0) * factor),
-      protein: Math.round((food.nutriments.proteins_100g || 0) * factor),
-      carbs: Math.round((food.nutriments.carbohydrates_100g || 0) * factor),
-      fat: Math.round((food.nutriments.fat_100g || 0) * factor),
-      meal: selectedMeal,
+  const confirmAdd = async (food: FoodResult) => {
+    if (!user) {
+      return
     }
-    setLoggedFoods(prev => [...prev, entry])
+
+    setSavingFood(true)
+    setErrorMessage(null)
+
+    const quantity = Number.parseFloat(servingSize)
+    const quantityMultiplier = Number.isFinite(quantity) && quantity > 0 ? quantity : 1
+    const { data, error } = await supabase
+      .from('food_entries')
+      .insert({
+        user_id: user.id,
+        meal_type: MEAL_TYPE_TO_DB[selectedMeal as keyof typeof MEAL_TYPE_TO_DB],
+        food_name: food.name,
+        brand: food.brand ?? null,
+        external_food_id: food.id,
+        source: 'usda',
+        serving_amount: Number((food.servingAmount * quantityMultiplier).toFixed(2)),
+        serving_unit: food.servingUnit,
+        calories: Math.round(food.calories * quantityMultiplier),
+        protein: Number((food.protein * quantityMultiplier).toFixed(1)),
+        carbs: Number((food.carbs * quantityMultiplier).toFixed(1)),
+        fat: Number((food.fat * quantityMultiplier).toFixed(1)),
+        fiber: food.fiber != null ? Number((food.fiber * quantityMultiplier).toFixed(1)) : null,
+        sugar: food.sugar != null ? Number((food.sugar * quantityMultiplier).toFixed(1)) : null,
+        sodium: food.sodium != null ? Number((food.sodium * quantityMultiplier).toFixed(1)) : null,
+      })
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Failed to save food entry', error)
+      setErrorMessage('Could not save this food entry. Please try again.')
+      setSavingFood(false)
+      return
+    }
+
+    setLoggedFoods(prev => [mapFoodEntryToLoggedFood(data), ...prev])
     setAddingFood(null)
     setResults([])
     setQuery('')
-    setServingSize('100')
+    setServingSize('1')
+    setHasSearched(false)
+    setSavingFood(false)
   }
 
-  const removeFood = (id: string) => setLoggedFoods(prev => prev.filter(f => f.id !== id))
+  const removeFood = async (id: string) => {
+    setErrorMessage(null)
+
+    const { error } = await supabase
+      .from('food_entries')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Failed to delete food entry', error)
+      setErrorMessage('Could not remove this food entry. Please try again.')
+      return
+    }
+
+    setLoggedFoods(prev => prev.filter(f => f.id !== id))
+  }
 
   const totals = loggedFoods.reduce((acc, f) => ({
     calories: acc.calories + f.calories,
@@ -130,6 +237,12 @@ export default function FoodPage() {
           <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Food Log</h1>
           <p style={{ color: '#A0A0A0' }} className="mt-1">Track your nutrition for today</p>
         </div>
+
+        {errorMessage && (
+          <div style={{ marginBottom: 24, borderRadius: 12, padding: 14, backgroundColor: 'rgba(232,0,45,0.12)', border: '0.5px solid rgba(232,0,45,0.4)', color: '#fff', fontSize: 13 }}>
+            {errorMessage}
+          </div>
+        )}
 
         {/* Daily summary */}
         <div style={{ marginBottom: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
@@ -236,7 +349,7 @@ export default function FoodPage() {
                   />
                 </div>
                 <button
-                  onClick={searchFood}
+                  onClick={() => void searchFood()}
                   disabled={searching}
                   style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
@@ -247,28 +360,37 @@ export default function FoodPage() {
               {/* Add serving size input when a food is selected */}
               {addingFood && (
                 <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: '#252525', border: '1px solid #E8002D' }}>
-                  <p className="text-white font-semibold text-sm mb-1">{addingFood.product_name}</p>
+                  <p className="text-white font-semibold text-sm mb-1">{addingFood.name}</p>
+                  {addingFood.brand && (
+                    <p className="text-xs mb-1" style={{ color: '#A0A0A0' }}>{addingFood.brand}</p>
+                  )}
                   <p className="text-xs mb-3" style={{ color: '#A0A0A0' }}>Adding to: {selectedMeal}</p>
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
-                      <label className="text-xs mb-1 block" style={{ color: '#A0A0A0' }}>Serving size (g)</label>
+                      <label className="text-xs mb-1 block" style={{ color: '#A0A0A0' }}>Number of servings</label>
                       <input
                         type="number"
                         value={servingSize}
                         onChange={e => setServingSize(e.target.value)}
+                        min="0.25"
+                        step="0.25"
                         style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 6, padding: '8px 12px', width: '100%', outline: 'none', fontSize: 14 }}
                       />
                     </div>
                     <div style={{ color: '#A0A0A0', fontSize: 13, marginTop: 20 }}>
-                      ~{Math.round((addingFood.nutriments['energy-kcal_100g'] || 0) * parseFloat(servingSize || '0') / 100)} kcal
+                      ~{Math.round(addingFood.calories * Math.max(Number.parseFloat(servingSize) || 1, 0.25))} kcal
                     </div>
                   </div>
+                  <p className="text-xs mt-2" style={{ color: '#A0A0A0' }}>
+                    Base serving: {addingFood.servingDescription}
+                  </p>
                   <div className="flex gap-2 mt-3">
                     <button
-                      onClick={() => confirmAdd(addingFood)}
+                      onClick={() => void confirmAdd(addingFood)}
+                      disabled={savingFood}
                       style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
-                      Add to {selectedMeal}
+                      {savingFood ? 'Saving...' : `Add to ${selectedMeal}`}
                     </button>
                     <button
                       onClick={() => setAddingFood(null)}
@@ -286,14 +408,17 @@ export default function FoodPage() {
                   {results.map((food, i) => (
                     <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: '#252525' }}>
                       <div className="min-w-0 flex-1 mr-3">
-                        <p className="text-white text-sm font-semibold truncate">{food.product_name}</p>
+                        <p className="text-white text-sm font-semibold truncate">{food.name}</p>
                         <p className="text-xs" style={{ color: '#A0A0A0' }}>
-                          {food.brands && `${food.brands} · `}
-                          {food.nutriments['energy-kcal_100g'] ? `${Math.round(food.nutriments['energy-kcal_100g'])} kcal/100g` : 'No calorie data'}
+                          {food.brand && `${food.brand} · `}
+                          {Math.round(food.calories)} kcal · {food.servingDescription}
                         </p>
                       </div>
                       <button
-                        onClick={() => setAddingFood(food)}
+                        onClick={() => {
+                          setServingSize('1')
+                          setAddingFood(food)
+                        }}
                         style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                       >
                         + Add
@@ -303,7 +428,15 @@ export default function FoodPage() {
                 </div>
               )}
 
-              {results.length === 0 && !searching && !query && (
+              {results.length === 0 && !searching && hasSearched && query.trim() && (
+                <div className="text-center py-8">
+                  <Flame size={32} style={{ color: '#2A2A2A', margin: '0 auto 12px' }} />
+                  <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No foods found for &quot;{query}&quot;</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 13 }}>Try a more specific brand name or singular term like &quot;egg&quot;.</p>
+                </div>
+              )}
+
+              {results.length === 0 && !searching && !query && !hasSearched && (
                 <div className="text-center py-8">
                   <Flame size={32} style={{ color: '#2A2A2A', margin: '0 auto 12px' }} />
                   <p style={{ color: '#A0A0A0', fontSize: 14 }}>Search for food to log your nutrition</p>
@@ -314,6 +447,11 @@ export default function FoodPage() {
 
           {/* Food log by meal */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {loadingFoods && (
+              <div style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading your food log...</p>
+              </div>
+            )}
             {grouped.map(({ meal, foods }) => {
               const mealCals = foods.reduce((a, f) => a + f.calories, 0)
               return (
@@ -336,7 +474,7 @@ export default function FoodPage() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 12 }}>
                             <span style={{ fontSize: 14, fontWeight: 700, color: '#E8002D' }}>{f.calories}</span>
-                            <button onClick={() => removeFood(f.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}>
+                            <button onClick={() => void removeFood(f.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}>
                               <X size={14} />
                             </button>
                           </div>
@@ -352,4 +490,17 @@ export default function FoodPage() {
       </div>
     </>
   )
+}
+
+function mapFoodEntryToLoggedFood(entry: FoodEntryRow): LoggedFood {
+  return {
+    id: entry.id,
+    name: entry.food_name,
+    brand: entry.brand ?? undefined,
+    calories: entry.calories,
+    protein: Number(entry.protein),
+    carbs: Number(entry.carbs),
+    fat: Number(entry.fat),
+    meal: DB_TO_MEAL_TYPE[entry.meal_type],
+  }
 }
