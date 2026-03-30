@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Dumbbell, UtensilsCrossed, Target, Users, LogOut } from 'lucide-react'
+import { LayoutDashboard, Dumbbell, UtensilsCrossed, Target, Users, LogOut, Menu, X } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,78 +15,205 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  return (
-    <aside style={{ position: 'fixed', left: 0, top: 0, height: '100%', width: '256px', display: 'flex', flexDirection: 'column', zIndex: 40, backgroundColor: '#1E1E1E', borderRight: '1px solid #2A2A2A' }}>
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="px-6 py-8">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#E8002D' }}>
-            <span className="text-white font-black text-sm">FT</span>
+      <div style={{ padding: '32px 24px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <span style={{ color: '#fff', fontWeight: 900, fontSize: 13 }}>FT</span>
           </div>
-          <span className="text-white font-bold text-lg tracking-tight">FitTogether</span>
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>FitTogether</span>
         </div>
       </div>
 
       {/* Partner pill */}
-      <div className="mx-4 mb-6 p-3 rounded-xl" style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A' }}>
-        <p className="text-xs mb-2" style={{ color: '#A0A0A0' }}>Connected with</p>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: '#E8002D' }}>
+      <div style={{ margin: '0 16px 24px', padding: 12, borderRadius: 12, backgroundColor: '#252525', border: '1px solid #2A2A2A' }}>
+        <p style={{ color: '#A0A0A0', fontSize: 11, marginBottom: 8 }}>Connected with</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
             AR
           </div>
           <div>
-            <p className="text-white text-sm font-medium">Alex Rivera</p>
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22c55e' }}></div>
-              <span className="text-xs" style={{ color: '#A0A0A0' }}>Active today</span>
+            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>Alex Rivera</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22c55e' }} />
+              <span style={{ color: '#A0A0A0', fontSize: 11 }}>Active today</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-4 space-y-1">
+      <nav style={{ flex: 1, padding: '0 16px' }}>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (
             <Link
               key={href}
               href={href}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200"
+              onClick={() => setMobileOpen(false)}
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px',
+                borderRadius: 12,
+                marginBottom: 4,
                 backgroundColor: active ? 'rgba(232, 0, 45, 0.12)' : 'transparent',
                 color: active ? '#E8002D' : '#A0A0A0',
+                textDecoration: 'none',
+                transition: 'background 0.15s',
               }}
             >
               <Icon size={18} />
-              <span className="text-sm font-medium">{label}</span>
-              {active && <div className="ml-auto w-1 h-4 rounded-full" style={{ backgroundColor: '#E8002D' }}></div>}
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{label}</span>
+              {active && <div style={{ marginLeft: 'auto', width: 3, height: 16, borderRadius: 2, backgroundColor: '#E8002D' }} />}
             </Link>
           )
         })}
       </nav>
 
       {/* User + logout */}
-      <div className="p-4 border-t" style={{ borderColor: '#2A2A2A' }}>
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ backgroundColor: '#E8002D' }}>
+      <div style={{ padding: 16, borderTop: '1px solid #2A2A2A' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#fff', flexShrink: 0 }}>
             AP
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">Amanpreet</p>
-            <p className="text-xs truncate" style={{ color: '#A0A0A0' }}>user@email.com</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Amanpreet</p>
+            <p style={{ color: '#A0A0A0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>user@email.com</p>
           </div>
         </div>
         <Link
           href="/auth"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors w-full"
-          style={{ color: '#A0A0A0' }}
+          onClick={() => setMobileOpen(false)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, color: '#A0A0A0', fontSize: 13, textDecoration: 'none' }}
         >
           <LogOut size={15} />
           Sign out
         </Link>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg-hidden-sidebar-btn"
+        style={{
+          position: 'fixed',
+          top: 16,
+          left: 16,
+          zIndex: 50,
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          backgroundColor: '#1E1E1E',
+          border: '1px solid #2A2A2A',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: '#fff',
+        }}
+        aria-label="Open menu"
+      >
+        <Menu size={20} />
+      </button>
+      <style>{`
+        @media (min-width: 1024px) { .lg-hidden-sidebar-btn { display: none !important; } }
+      `}</style>
+
+      {/* Mobile overlay backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="sidebar-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            zIndex: 45,
+          }}
+        />
+      )}
+
+      {/* Desktop sidebar (always visible) */}
+      <aside
+        className="sidebar-desktop"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          height: '100%',
+          width: 256,
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 40,
+          backgroundColor: '#1E1E1E',
+          borderRight: '1px solid #2A2A2A',
+        }}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile drawer */}
+      <aside
+        className="sidebar-mobile"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          height: '100%',
+          width: 280,
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 50,
+          backgroundColor: '#1E1E1E',
+          borderRight: '1px solid #2A2A2A',
+          transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease',
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            backgroundColor: '#252525',
+            border: '1px solid #2A2A2A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: '#A0A0A0',
+          }}
+        >
+          <X size={16} />
+        </button>
+        {sidebarContent}
+      </aside>
+
+      <style>{`
+        .sidebar-desktop { display: flex; }
+        .sidebar-mobile { display: none; }
+        .sidebar-backdrop { display: none; }
+        @media (max-width: 1023px) {
+          .sidebar-desktop { display: none !important; }
+          .sidebar-mobile { display: flex !important; }
+          .sidebar-backdrop { display: block !important; }
+        }
+      `}</style>
+    </>
   )
 }

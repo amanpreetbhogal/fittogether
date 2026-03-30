@@ -24,7 +24,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#141414' }}>
+    <div className="min-h-screen flex" style={{ backgroundColor: '#141414', flexDirection: 'row' }}>
       {/* Left panel - branding */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 p-16" style={{ backgroundColor: '#1E1E1E', borderRight: '1px solid #2A2A2A' }}>
         <div className="flex items-center gap-3">
