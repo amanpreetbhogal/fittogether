@@ -188,16 +188,16 @@ export default function WorkoutPage() {
               <h2 className="text-white font-bold text-lg mb-4">Recent Workouts</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {mockRecentWorkouts.map(w => (
-                  <div key={w.id} className="p-4 rounded-xl" style={{ backgroundColor: '#252525' }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white font-semibold">{w.name}</p>
-                      <span className="text-xs" style={{ color: '#A0A0A0' }}>{w.date}</span>
+                  <div key={w.id} style={{ padding: 16, borderRadius: 10, backgroundColor: '#252525' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <p style={{ color: '#fff', fontWeight: 600 }}>{w.name}</p>
+                      <span style={{ fontSize: 12, color: '#A0A0A0' }}>{w.date}</span>
                     </div>
-                    <div className="flex gap-4">
-                      <span className="text-xs flex items-center gap-1" style={{ color: '#A0A0A0' }}>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
                         <Clock size={12} /> {w.duration_minutes} min
                       </span>
-                      <span className="text-xs flex items-center gap-1" style={{ color: '#A0A0A0' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
                         <Dumbbell size={12} /> {w.exercises.length} exercises
                       </span>
                     </div>

@@ -186,7 +186,17 @@ export default function DashboardPage() {
                 </div>
                 {/* Right: Head-to-Head */}
                 <div>
-                  <p style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 12 }}>Head-to-Head</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Head-to-Head</p>
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                      <span style={{ fontSize: 11, color: '#A0A0A0' }}>You</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#E8002D' }} />
+                      <span style={{ fontSize: 11, color: '#A0A0A0' }}>Priyana</span>
+                    </div>
+                  </div>
                   {[
                     { label: 'Weekly Workouts', you: 4, partner: mockPartner.weeklyWorkouts },
                     { label: 'Avg Cal Burned', you: 378, partner: 419 },

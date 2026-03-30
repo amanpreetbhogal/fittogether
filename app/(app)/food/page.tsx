@@ -188,10 +188,10 @@ export default function FoodPage() {
           {/* Search panel */}
           <div>
             <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <h2 className="text-white font-bold text-lg mb-4">Add Food</h2>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: '1.125rem', marginBottom: 12 }}>Add Food</h2>
 
               {/* Meal selector */}
-              <div className="flex gap-2 mb-4 flex-wrap">
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                 {MEAL_TYPES.map(m => (
                   <button
                     key={m}
@@ -214,8 +214,8 @@ export default function FoodPage() {
                 ))}
               </div>
 
-              <div className="flex gap-2 mb-4">
-                <div className="relative flex-1">
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
                   <Search size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
@@ -318,24 +318,24 @@ export default function FoodPage() {
               const mealCals = foods.reduce((a, f) => a + f.calories, 0)
               return (
                 <div key={meal} style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-bold">{meal}</h3>
-                    <span className="text-sm font-semibold" style={{ color: '#E8002D' }}>{mealCals} kcal</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <h3 style={{ color: '#fff', fontWeight: 700 }}>{meal}</h3>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#E8002D' }}>{mealCals} kcal</span>
                   </div>
                   {foods.length === 0 ? (
-                    <p className="text-sm py-2" style={{ color: '#A0A0A0' }}>No foods logged</p>
+                    <p style={{ fontSize: 14, padding: '8px 0', color: '#A0A0A0' }}>No foods logged</p>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {foods.map(f => (
-                        <div key={f.id} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: '#252525' }}>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-white text-sm font-medium truncate">{f.name}</p>
-                            <p className="text-xs" style={{ color: '#A0A0A0' }}>
+                        <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 10, backgroundColor: '#252525' }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <p style={{ color: '#fff', fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</p>
+                            <p style={{ fontSize: 12, color: '#A0A0A0', marginTop: 2 }}>
                               P: {f.protein}g · C: {f.carbs}g · F: {f.fat}g
                             </p>
                           </div>
-                          <div className="flex items-center gap-3 ml-3">
-                            <span className="text-sm font-bold" style={{ color: '#E8002D' }}>{f.calories}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 12 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#E8002D' }}>{f.calories}</span>
                             <button onClick={() => removeFood(f.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}>
                               <X size={14} />
                             </button>
