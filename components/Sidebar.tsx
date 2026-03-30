@@ -30,16 +30,16 @@ export default function Sidebar() {
       </div>
 
       {/* Partner pill */}
-      <div style={{ margin: '0 16px 24px', padding: 12, borderRadius: 12, backgroundColor: '#252525', border: '1px solid #2A2A2A' }}>
+      <div style={{ margin: '0 16px 24px', padding: 12, borderRadius: 10, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
         <p style={{ color: '#A0A0A0', fontSize: 11, marginBottom: 8 }}>Connected with</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-            AR
+            PK
           </div>
           <div>
-            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>Alex Rivera</p>
+            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>Priyana Kumar</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22c55e' }} />
+              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4ade80' }} />
               <span style={{ color: '#A0A0A0', fontSize: 11 }}>Active today</span>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function Sidebar() {
       </nav>
 
       {/* User + logout */}
-      <div style={{ padding: 16, borderTop: '1px solid #2A2A2A' }}>
+      <div style={{ padding: 16, borderTop: '0.5px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#fff', flexShrink: 0 }}>
             AP
@@ -114,7 +114,7 @@ export default function Sidebar() {
           height: 40,
           borderRadius: 10,
           backgroundColor: '#1E1E1E',
-          border: '1px solid #2A2A2A',
+          border: '0.5px solid rgba(255,255,255,0.15)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -156,7 +156,7 @@ export default function Sidebar() {
           flexDirection: 'column',
           zIndex: 40,
           backgroundColor: '#1E1E1E',
-          borderRight: '1px solid #2A2A2A',
+          borderRight: '0.5px solid rgba(255,255,255,0.08)',
         }}
       >
         {sidebarContent}
@@ -175,7 +175,7 @@ export default function Sidebar() {
           flexDirection: 'column',
           zIndex: 50,
           backgroundColor: '#1E1E1E',
-          borderRight: '1px solid #2A2A2A',
+          borderRight: '0.5px solid rgba(255,255,255,0.08)',
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
         }}
@@ -191,7 +191,7 @@ export default function Sidebar() {
             height: 32,
             borderRadius: 8,
             backgroundColor: '#252525',
-            border: '1px solid #2A2A2A',
+            border: '0.5px solid rgba(255,255,255,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

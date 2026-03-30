@@ -58,12 +58,12 @@ export default function GoalsPage() {
       <div className="goals-wrapper">
         <div className="goals-header">
           <div>
-            <h1 className="text-3xl font-black text-white">Goals</h1>
+            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Goals</h1>
             <p style={{ color: '#A0A0A0' }} className="mt-1">Track and crush your fitness goals</p>
           </div>
           <button
             onClick={() => setShowForm(true)}
-            style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}
+            style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <Plus size={16} /> New Goal
           </button>
@@ -71,14 +71,14 @@ export default function GoalsPage() {
 
         {/* New goal form */}
         {showForm && (
-          <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #E8002D' }}>
+          <div style={{ borderRadius: 16, padding: 24, marginBottom: 24, backgroundColor: '#1E1E1E', border: '1px solid #E8002D' }}>
             <h2 className="text-white font-bold text-lg mb-4">Create New Goal</h2>
             <div className="space-y-3">
               <input
                 placeholder="Goal title (e.g. Bench press 225 lbs)"
                 value={newGoal.title}
                 onChange={e => setNewGoal(p => ({ ...p, title: e.target.value }))}
-                style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 10, padding: '11px 14px', width: '100%', outline: 'none', fontSize: 14 }}
+                style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', width: '100%', outline: 'none', fontSize: 14 }}
               />
               <div className="grid grid-cols-3 gap-3">
                 <input
@@ -86,20 +86,20 @@ export default function GoalsPage() {
                   type="number"
                   value={newGoal.current}
                   onChange={e => setNewGoal(p => ({ ...p, current: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
                 />
                 <input
                   placeholder="Target value"
                   type="number"
                   value={newGoal.target}
                   onChange={e => setNewGoal(p => ({ ...p, target: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
                 />
                 <input
                   placeholder="Unit (lbs, min, km...)"
                   value={newGoal.unit}
                   onChange={e => setNewGoal(p => ({ ...p, unit: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -114,13 +114,13 @@ export default function GoalsPage() {
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={addGoal}
-                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   Create Goal
                 </button>
                 <button
                   onClick={() => setShowForm(false)}
-                  style={{ backgroundColor: '#252525', color: '#A0A0A0', border: '1px solid #2A2A2A', borderRadius: 10, padding: '10px 20px', cursor: 'pointer', fontSize: 14 }}
+                  style={{ backgroundColor: '#2A2A2A', color: '#fff', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   Cancel
                 </button>
@@ -130,11 +130,11 @@ export default function GoalsPage() {
         )}
 
         {/* Goals list */}
-        <div className="space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {goals.map(g => {
             const pct = Math.min(100, Math.round((g.current / g.target) * 100))
             return (
-              <div key={g.id} className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+              <div key={g.id} style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(232,0,45,0.12)' }}>

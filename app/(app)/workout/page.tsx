@@ -25,7 +25,7 @@ interface ActiveExercise {
 }
 
 const difficultyColor: Record<string, string> = {
-  beginner: '#22c55e',
+  beginner: '#4ade80',
   intermediate: '#f59e0b',
   expert: '#E8002D',
 }
@@ -90,7 +90,7 @@ export default function WorkoutPage() {
       <style>{`
         .workout-wrapper { padding: 32px; max-width: 1152px; margin: 0 auto; }
         .workout-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
-        .workout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        .workout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; } .workout-section { margin-bottom: 24px; }
         @media (max-width: 1023px) {
           .workout-wrapper { padding: 72px 16px 24px; }
           .workout-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
@@ -100,13 +100,13 @@ export default function WorkoutPage() {
       <div className="workout-wrapper">
         <div className="workout-header">
           <div>
-            <h1 className="font-black text-white" style={{ fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Workout Log</h1>
+            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Workout Log</h1>
             <p style={{ color: '#A0A0A0', marginTop: 4 }}>Search exercises and build your workout</p>
           </div>
           {workoutActive && (
             <button
               onClick={() => { setWorkoutActive(false); setActiveExercises([]) }}
-              style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 20px', fontWeight: 700, cursor: 'pointer' }}
+              style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               Finish Workout
             </button>
@@ -116,7 +116,7 @@ export default function WorkoutPage() {
         <div className="workout-grid">
           {/* Left: Search */}
           <div>
-            <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+            <div style={{ marginBottom: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <h2 className="text-white font-bold text-lg mb-4">Find Exercises</h2>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -129,7 +129,7 @@ export default function WorkoutPage() {
                     onKeyDown={e => e.key === 'Enter' && searchExercises()}
                     style={{
                       backgroundColor: '#252525',
-                      border: '1px solid #2A2A2A',
+                      border: '0.5px solid rgba(255,255,255,0.08)',
                       color: '#fff',
                       borderRadius: 10,
                       padding: '11px 14px 11px 38px',
@@ -142,7 +142,7 @@ export default function WorkoutPage() {
                 <button
                   onClick={searchExercises}
                   disabled={searching}
-                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   {searching ? '...' : 'Search'}
                 </button>
@@ -154,7 +154,7 @@ export default function WorkoutPage() {
                     <div
                       key={ex.name}
                       className="flex items-center justify-between p-4 rounded-xl"
-                      style={{ backgroundColor: '#252525', border: '1px solid #2A2A2A' }}
+                      style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}
                     >
                       <div className="flex-1 min-w-0 mr-3">
                         <p className="text-white font-semibold text-sm capitalize">{ex.name}</p>
@@ -166,7 +166,7 @@ export default function WorkoutPage() {
                       </div>
                       <button
                         onClick={() => addExercise(ex)}
-                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '1px solid rgba(232,0,45,0.2)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}
+                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                       >
                         + Add
                       </button>
@@ -184,9 +184,9 @@ export default function WorkoutPage() {
             </div>
 
             {/* Recent workouts */}
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+            <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <h2 className="text-white font-bold text-lg mb-4">Recent Workouts</h2>
-              <div className="space-y-3">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {mockRecentWorkouts.map(w => (
                   <div key={w.id} className="p-4 rounded-xl" style={{ backgroundColor: '#252525' }}>
                     <div className="flex items-center justify-between mb-2">
@@ -209,7 +209,7 @@ export default function WorkoutPage() {
 
           {/* Right: Active workout */}
           <div>
-            <div className="rounded-2xl p-6 sticky top-8" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+            <div style={{ position: 'sticky', top: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <input
@@ -246,7 +246,7 @@ export default function WorkoutPage() {
               ) : (
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                   {activeExercises.map(ex => (
-                    <div key={ex.name} className="rounded-xl overflow-hidden" style={{ border: '1px solid #2A2A2A' }}>
+                    <div key={ex.name} className="rounded-xl overflow-hidden" style={{ border: '0.5px solid rgba(255,255,255,0.08)' }}>
                       <div
                         className="flex items-center justify-between p-4 cursor-pointer"
                         style={{ backgroundColor: '#252525' }}
@@ -279,20 +279,20 @@ export default function WorkoutPage() {
                                 placeholder="0"
                                 value={set.weight}
                                 onChange={e => updateSet(ex.name, idx, 'weight', e.target.value)}
-                                style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 8, padding: '8px 10px', fontSize: 14, outline: 'none' }}
+                                style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 6, padding: '8px 10px', fontSize: 14, outline: 'none' }}
                               />
                               <input
                                 type="number"
                                 placeholder="0"
                                 value={set.reps}
                                 onChange={e => updateSet(ex.name, idx, 'reps', e.target.value)}
-                                style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 8, padding: '8px 10px', fontSize: 14, outline: 'none' }}
+                                style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 6, padding: '8px 10px', fontSize: 14, outline: 'none' }}
                               />
                             </div>
                           ))}
                           <button
                             onClick={() => addSet(ex.name)}
-                            style={{ color: '#E8002D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, marginTop: 4 }}
+                            style={{ color: '#E8002D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, marginTop: 4, fontFamily: 'inherit' }}
                           >
                             + Add Set
                           </button>

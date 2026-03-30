@@ -26,9 +26,9 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#141414', flexDirection: 'row' }}>
       {/* Left panel - branding */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 p-16" style={{ backgroundColor: '#1E1E1E', borderRight: '1px solid #2A2A2A' }}>
+      <div className="hidden lg:flex flex-col justify-between" style={{ width: '50%', padding: 64, backgroundColor: '#1E1E1E', borderRight: '0.5px solid rgba(255,255,255,0.08)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#E8002D' }}>
+          <div className="w-10 h-10 rounded-ds-md flex items-center justify-center" style={{ backgroundColor: '#E8002D' }}>
             <span className="text-white font-black text-base">FT</span>
           </div>
           <span className="text-white font-bold text-xl tracking-tight">FitTogether</span>
@@ -64,7 +64,7 @@ export default function AuthPage() {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center" style={{ padding: 32 }}>
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-10 lg:hidden">
@@ -92,9 +92,9 @@ export default function AuthPage() {
                   onChange={e => setName(e.target.value)}
                   style={{
                     backgroundColor: '#1E1E1E',
-                    border: '1px solid #2A2A2A',
+                    border: '0.5px solid rgba(255,255,255,0.08)',
                     color: '#ffffff',
-                    borderRadius: '12px',
+                    borderRadius: '10px',
                     padding: '14px 14px 14px 40px',
                     width: '100%',
                     outline: 'none',
@@ -114,9 +114,9 @@ export default function AuthPage() {
                 onChange={e => setEmail(e.target.value)}
                 style={{
                   backgroundColor: '#1E1E1E',
-                  border: '1px solid #2A2A2A',
+                  border: '0.5px solid rgba(255,255,255,0.08)',
                   color: '#ffffff',
-                  borderRadius: '12px',
+                  borderRadius: '10px',
                   padding: '14px 14px 14px 40px',
                   width: '100%',
                   outline: 'none',
@@ -135,9 +135,9 @@ export default function AuthPage() {
                 onChange={e => setPassword(e.target.value)}
                 style={{
                   backgroundColor: '#1E1E1E',
-                  border: '1px solid #2A2A2A',
+                  border: '0.5px solid rgba(255,255,255,0.08)',
                   color: '#ffffff',
-                  borderRadius: '12px',
+                  borderRadius: '10px',
                   padding: '14px 40px 14px 40px',
                   width: '100%',
                   outline: 'none',
@@ -161,7 +161,7 @@ export default function AuthPage() {
                 backgroundColor: '#E8002D',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 padding: '14px',
                 width: '100%',
                 fontSize: '15px',
@@ -188,8 +188,8 @@ export default function AuthPage() {
                 style={{
                   backgroundColor: '#1E1E1E',
                   color: '#ffffff',
-                  border: '1px solid #2A2A2A',
-                  borderRadius: '12px',
+                  border: '0.5px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
                   padding: '13px',
                   width: '100%',
                   fontSize: '14px',

@@ -14,15 +14,31 @@ export default function NudgeButton({ partnerName }: { partnerName: string }) {
   return (
     <button
       onClick={handleNudge}
-      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200"
       style={{
-        backgroundColor: sent ? 'rgba(232, 0, 45, 0.15)' : '#E8002D',
-        color: sent ? '#E8002D' : '#ffffff',
-        border: sent ? '1px solid #E8002D' : 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '10px 20px',
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: 'pointer',
+        transition: 'opacity 0.15s',
+        fontFamily: 'inherit',
+        letterSpacing: '0.2px',
+        ...(sent ? {
+          backgroundColor: 'rgba(232, 0, 45, 0.15)',
+          color: '#E8002D',
+          border: '0.5px solid rgba(232, 0, 45, 0.4)',
+        } : {
+          backgroundColor: '#E8002D',
+          color: '#ffffff',
+          border: 'none',
+        }),
       }}
     >
-      <Zap size={15} fill={sent ? 'none' : 'currentColor'} />
-      {sent ? `Nudge sent to ${partnerName}!` : `Nudge ${partnerName}`}
+      <Zap size={14} fill={sent ? 'none' : 'currentColor'} />
+      {sent ? `Nudge sent!` : `Nudge ${partnerName}`}
     </button>
   )
 }

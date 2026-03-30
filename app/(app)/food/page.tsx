@@ -127,12 +127,12 @@ export default function FoodPage() {
       `}</style>
       <div className="food-wrapper">
         <div className="mb-8">
-          <h1 className="text-3xl font-black text-white">Food Log</h1>
+          <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Food Log</h1>
           <p style={{ color: '#A0A0A0' }} className="mt-1">Track your nutrition for today</p>
         </div>
 
         {/* Daily summary */}
-        <div className="rounded-2xl p-6 mb-8" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+        <div style={{ marginBottom: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
           <h2 className="text-white font-bold mb-5">Today&apos;s Summary</h2>
           <div className="food-macro-grid">
             {[
@@ -167,7 +167,7 @@ export default function FoodPage() {
         <div className="food-grid">
           {/* Search panel */}
           <div>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+            <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <h2 className="text-white font-bold text-lg mb-4">Add Food</h2>
 
               {/* Meal selector */}
@@ -177,15 +177,16 @@ export default function FoodPage() {
                     key={m}
                     onClick={() => setSelectedMeal(m)}
                     style={{
-                      backgroundColor: selectedMeal === m ? '#E8002D' : '#252525',
+                      backgroundColor: selectedMeal === m ? '#E8002D' : '#2A2A2A',
                       color: selectedMeal === m ? '#fff' : '#A0A0A0',
-                      border: '1px solid',
-                      borderColor: selectedMeal === m ? '#E8002D' : '#2A2A2A',
-                      borderRadius: 8,
+                      border: '0.5px solid',
+                      borderColor: selectedMeal === m ? '#E8002D' : 'rgba(255,255,255,0.08)',
+                      borderRadius: 6,
                       padding: '6px 14px',
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: 'pointer',
+                      fontFamily: 'inherit',
                     }}
                   >
                     {m}
@@ -204,7 +205,7 @@ export default function FoodPage() {
                     onKeyDown={e => e.key === 'Enter' && searchFood()}
                     style={{
                       backgroundColor: '#252525',
-                      border: '1px solid #2A2A2A',
+                      border: '0.5px solid rgba(255,255,255,0.08)',
                       color: '#fff',
                       borderRadius: 10,
                       padding: '11px 14px 11px 38px',
@@ -217,7 +218,7 @@ export default function FoodPage() {
                 <button
                   onClick={searchFood}
                   disabled={searching}
-                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   {searching ? '...' : 'Search'}
                 </button>
@@ -235,7 +236,7 @@ export default function FoodPage() {
                         type="number"
                         value={servingSize}
                         onChange={e => setServingSize(e.target.value)}
-                        style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A', color: '#fff', borderRadius: 8, padding: '8px 12px', width: '100%', outline: 'none', fontSize: 14 }}
+                        style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 6, padding: '8px 12px', width: '100%', outline: 'none', fontSize: 14 }}
                       />
                     </div>
                     <div style={{ color: '#A0A0A0', fontSize: 13, marginTop: 20 }}>
@@ -245,13 +246,13 @@ export default function FoodPage() {
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => confirmAdd(addingFood)}
-                      style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                      style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       Add to {selectedMeal}
                     </button>
                     <button
                       onClick={() => setAddingFood(null)}
-                      style={{ backgroundColor: '#1E1E1E', color: '#A0A0A0', border: '1px solid #2A2A2A', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}
+                      style={{ backgroundColor: '#2A2A2A', color: '#A0A0A0', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}
                     >
                       Cancel
                     </button>
@@ -273,7 +274,7 @@ export default function FoodPage() {
                       </div>
                       <button
                         onClick={() => setAddingFood(food)}
-                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '1px solid rgba(232,0,45,0.2)', borderRadius: 8, padding: '5px 12px', fontWeight: 600, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}
+                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                       >
                         + Add
                       </button>
@@ -292,11 +293,11 @@ export default function FoodPage() {
           </div>
 
           {/* Food log by meal */}
-          <div className="space-y-4">
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {grouped.map(({ meal, foods }) => {
               const mealCals = foods.reduce((a, f) => a + f.calories, 0)
               return (
-                <div key={meal} className="rounded-2xl p-5" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+                <div key={meal} style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-white font-bold">{meal}</h3>
                     <span className="text-sm font-semibold" style={{ color: '#E8002D' }}>{mealCals} kcal</span>
@@ -304,7 +305,7 @@ export default function FoodPage() {
                   {foods.length === 0 ? (
                     <p className="text-sm py-2" style={{ color: '#A0A0A0' }}>No foods logged</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {foods.map(f => (
                         <div key={f.id} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: '#252525' }}>
                           <div className="min-w-0 flex-1">

@@ -44,8 +44,8 @@ export const mockRecentWorkouts = [
 ]
 
 export const mockPartner = {
-  name: 'Alex Rivera',
-  avatar: 'AR',
+  name: 'Priyana Kumar',
+  avatar: 'PK',
   streak: 12,
   lastWorkout: '2026-03-28',
   weeklyWorkouts: 5,

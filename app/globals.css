@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --bg-base: #141414;
+  --bg-surface: #1E1E1E;
+  --bg-raised: #2A2A2A;
+  --bg-hover: #333333;
+  --red: #E8002D;
+  --red-dim: rgba(232, 0, 45, 0.15);
+  --red-mid: rgba(232, 0, 45, 0.4);
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0A0;
+  --text-tertiary: #606060;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -7,22 +27,28 @@
 }
 
 body {
-  background-color: #141414;
-  color: #ffffff;
-  font-family: Inter, system-ui, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar {
-  width: 4px;
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: var(--bg-raised); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--red); }
+
+input, textarea, select {
+  background: var(--bg-surface);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 11px 14px;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
 }
-::-webkit-scrollbar-track {
-  background: #1E1E1E;
-}
-::-webkit-scrollbar-thumb {
-  background: #2A2A2A;
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #E8002D;
-}
+input:focus, textarea:focus, select:focus { border-color: var(--red); }
+input::placeholder, textarea::placeholder { color: var(--text-tertiary); }

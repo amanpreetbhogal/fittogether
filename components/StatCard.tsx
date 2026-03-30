@@ -10,30 +10,56 @@ interface StatCardProps {
 
 export default function StatCard({ label, value, unit, icon, accent, change, changePositive }: StatCardProps) {
   return (
-    <div
-      className="rounded-2xl p-5 flex flex-col gap-3"
-      style={{
-        backgroundColor: '#1E1E1E',
-        border: '1px solid #2A2A2A',
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium" style={{ color: '#A0A0A0' }}>{label}</span>
+    <div style={{
+      backgroundColor: '#1E1E1E',
+      border: '0.5px solid rgba(255,255,255,0.08)',
+      borderRadius: 16,
+      padding: 20,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: '#606060',
+          textTransform: 'uppercase',
+          letterSpacing: '0.8px',
+        }}>{label}</span>
         {icon && (
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: accent ? 'rgba(232, 0, 45, 0.15)' : '#252525' }}
-          >
-            <span style={{ color: accent ? '#E8002D' : '#A0A0A0' }}>{icon}</span>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            backgroundColor: accent ? 'rgba(232, 0, 45, 0.15)' : '#2A2A2A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: accent ? '#E8002D' : '#606060',
+          }}>
+            {icon}
           </div>
         )}
       </div>
-      <div className="flex items-end gap-1">
-        <span className="text-3xl font-black text-white">{value}</span>
-        {unit && <span className="text-sm mb-1" style={{ color: '#A0A0A0' }}>{unit}</span>}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+        <span style={{
+          fontSize: 36,
+          fontWeight: 700,
+          color: '#FFFFFF',
+          letterSpacing: '-1px',
+          lineHeight: 1,
+        }}>{value}</span>
+        {unit && (
+          <span style={{ fontSize: 14, color: '#A0A0A0', fontWeight: 400, marginBottom: 2 }}>{unit}</span>
+        )}
       </div>
       {change && (
-        <span className="text-xs font-medium" style={{ color: changePositive ? '#22c55e' : '#ef4444' }}>
+        <span style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: changePositive ? '#4ade80' : '#E8002D',
+        }}>
           {changePositive ? '↑' : '↓'} {change}
         </span>
       )}

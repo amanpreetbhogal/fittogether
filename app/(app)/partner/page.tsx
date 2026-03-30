@@ -18,7 +18,7 @@ const partnerWorkoutHistory = [
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A', borderRadius: 10, padding: '10px 14px' }}>
+      <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
         <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
         <p style={{ color: '#E8002D', fontWeight: 700, fontSize: 14 }}>{payload[0].value} kcal</p>
       </div>
@@ -77,24 +77,24 @@ export default function PartnerPage() {
         {/* Header */}
         <div className="partner-header">
           <div>
-            <h1 className="text-3xl font-black text-white">Partner View</h1>
+            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Partner View</h1>
             <p style={{ color: '#A0A0A0' }} className="mt-1">Stay connected with your partner&apos;s fitness journey</p>
           </div>
           <NudgeButton partnerName={mockPartner.name.split(' ')[0]} />
         </div>
 
         {/* Partner hero card */}
-        <div className="rounded-2xl p-6 mb-8" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+        <div style={{ marginBottom: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-5">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center font-black text-2xl text-white flex-shrink-0" style={{ backgroundColor: '#E8002D' }}>
               {mockPartner.avatar}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">
-                <h2 className="text-white font-black text-2xl">{mockPartner.name}</h2>
+                <h2 style={{ color: '#fff', fontWeight: 700, fontSize: '1.5rem' }}>{mockPartner.name}</h2>
                 <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#22c55e' }}>Active today</span>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#4ade80' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#4ade80' }}>Active today</span>
                 </div>
               </div>
               <p style={{ color: '#A0A0A0', fontSize: 14 }}>Last workout: {mockPartner.lastWorkout}</p>
@@ -107,7 +107,7 @@ export default function PartnerPage() {
               { label: 'This Week', value: mockPartner.weeklyWorkouts, icon: <Dumbbell size={16} />, unit: 'workouts' },
               { label: "Today's Calories", value: mockPartner.todayCalories.toLocaleString(), icon: <Flame size={16} />, unit: 'kcal' },
             ].map(item => (
-              <div key={item.label} className="rounded-xl p-4 text-center" style={{ backgroundColor: '#252525' }}>
+              <div key={item.label} style={{ borderRadius: 10, padding: 16, textAlign: 'center', backgroundColor: '#252525' }}>
                 <div className="flex justify-center mb-2" style={{ color: '#E8002D' }}>{item.icon}</div>
                 <p className="text-white font-black text-2xl">{item.value}</p>
                 <p className="text-xs" style={{ color: '#A0A0A0' }}>{item.label}</p>
@@ -118,7 +118,7 @@ export default function PartnerPage() {
 
         <div className="partner-charts">
           {/* Partner workout chart */}
-          <div className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+          <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <h2 className="text-white font-bold text-lg mb-1">{mockPartner.name.split(' ')[0]}&apos;s Weekly Calories</h2>
             <p className="text-sm mb-5" style={{ color: '#A0A0A0' }}>Calories burned this week</p>
             <ResponsiveContainer width="100%" height={180}>
@@ -132,7 +132,7 @@ export default function PartnerPage() {
           </div>
 
           {/* Comparison */}
-          <div className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+          <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <h2 className="text-white font-bold text-lg mb-5">Head-to-Head</h2>
             <div className="space-y-5">
               {[
@@ -162,12 +162,12 @@ export default function PartnerPage() {
         </div>
 
         {/* Shared goals */}
-        <div className="rounded-2xl p-6" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2A2A2A' }}>
+        <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2 mb-5">
             <Target size={18} style={{ color: '#E8002D' }} />
             <h2 className="text-white font-bold text-lg">Shared Goals</h2>
           </div>
-          <div className="space-y-4">
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {sharedGoals.map(g => {
               const pct = Math.min(100, Math.round((g.current / g.target) * 100))
               return (
