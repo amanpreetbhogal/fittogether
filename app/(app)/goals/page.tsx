@@ -80,27 +80,35 @@ export default function GoalsPage() {
                 onChange={e => setNewGoal(p => ({ ...p, title: e.target.value }))}
                 style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', width: '100%', outline: 'none', fontSize: 14 }}
               />
-              <div className="grid grid-cols-3 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <input
                   placeholder="Current value"
                   type="number"
                   value={newGoal.current}
                   onChange={e => setNewGoal(p => ({ ...p, current: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14, fontFamily: 'inherit' }}
                 />
                 <input
                   placeholder="Target value"
                   type="number"
                   value={newGoal.target}
                   onChange={e => setNewGoal(p => ({ ...p, target: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14, fontFamily: 'inherit' }}
                 />
-                <input
-                  placeholder="Unit (lbs, min, km...)"
+                <select
                   value={newGoal.unit}
                   onChange={e => setNewGoal(p => ({ ...p, unit: e.target.value }))}
-                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14 }}
-                />
+                  style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: newGoal.unit ? '#fff' : '#606060', borderRadius: 10, padding: '11px 14px', outline: 'none', fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}
+                >
+                  <option value="" disabled>Unit</option>
+                  <option value="lbs">lbs</option>
+                  <option value="kg">kg</option>
+                  <option value="min">min</option>
+                  <option value="km">km</option>
+                  <option value="miles">miles</option>
+                  <option value="reps">reps</option>
+                  <option value="%">%</option>
+                </select>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -129,58 +137,96 @@ export default function GoalsPage() {
           </div>
         )}
 
-        {/* Goals list */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {goals.map(g => {
-            const pct = Math.min(100, Math.round((g.current / g.target) * 100))
-            return (
-              <div key={g.id} style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(232,0,45,0.12)' }}>
-                      <Target size={18} style={{ color: '#E8002D' }} />
-                    </div>
-                    <div>
-                      <p className="text-white font-bold">{g.title}</p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        {g.shared ? (
-                          <><Users size={12} style={{ color: '#A0A0A0' }} /><span className="text-xs" style={{ color: '#A0A0A0' }}>Shared with partner</span></>
-                        ) : (
-                          <><Lock size={12} style={{ color: '#A0A0A0' }} /><span className="text-xs" style={{ color: '#A0A0A0' }}>Private</span></>
-                        )}
+        {/* Active Goals list */}
+        {(() => {
+          const activeGoals = goals.filter(g => Math.round((g.current / g.target) * 100) < 100)
+          const completedGoals = goals.filter(g => Math.round((g.current / g.target) * 100) >= 100)
+          return (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {activeGoals.map(g => {
+                  const pct = Math.min(100, Math.round((g.current / g.target) * 100))
+                  return (
+                    <div key={g.id} style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,0,45,0.12)', flexShrink: 0 }}>
+                            <Target size={18} style={{ color: '#E8002D' }} />
+                          </div>
+                          <div>
+                            <p style={{ color: '#fff', fontWeight: 700 }}>{g.title}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                              {g.shared ? (
+                                <><Users size={12} style={{ color: '#A0A0A0' }} /><span style={{ color: '#A0A0A0', fontSize: 12 }}>Shared with partner</span></>
+                              ) : (
+                                <><Lock size={12} style={{ color: '#A0A0A0' }} /><span style={{ color: '#A0A0A0', fontSize: 12 }}>Private</span></>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ color: '#E8002D', fontWeight: 900, fontSize: 24 }}>{pct}%</p>
+                          <p style={{ color: '#A0A0A0', fontSize: 12 }}>complete</p>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ color: '#A0A0A0', fontSize: 14 }}>Progress</span>
+                          <span style={{ color: '#fff', fontSize: 14 }}>{g.current} / {g.target} {g.unit}</span>
+                        </div>
+                        <div style={{ width: '100%', height: 8, borderRadius: 8, backgroundColor: '#2A2A2A' }}>
+                          <div style={{ height: 8, borderRadius: 8, width: `${pct}%`, backgroundColor: '#E8002D', transition: 'width 0.5s' }} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-black" style={{ color: '#E8002D' }}>{pct}%</p>
-                    <p className="text-xs" style={{ color: '#A0A0A0' }}>complete</p>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm" style={{ color: '#A0A0A0' }}>Progress</span>
-                    <span className="text-sm text-white">{g.current} / {g.target} {g.unit}</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full" style={{ backgroundColor: '#2A2A2A' }}>
-                    <div
-                      className="h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, backgroundColor: '#E8002D' }}
-                    />
-                  </div>
-                </div>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
 
-        {goals.length === 0 && (
-          <div className="text-center py-24">
-            <Target size={48} style={{ color: '#2A2A2A', margin: '0 auto 16px' }} />
-            <p className="text-white font-bold text-xl mb-2">No goals yet</p>
-            <p style={{ color: '#A0A0A0' }}>Set your first goal and crush it with your partner</p>
-          </div>
-        )}
+              {activeGoals.length === 0 && completedGoals.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '96px 0' }}>
+                  <Target size={48} style={{ color: '#2A2A2A', margin: '0 auto 16px' }} />
+                  <p style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginBottom: 8 }}>No goals yet</p>
+                  <p style={{ color: '#A0A0A0' }}>Set your first goal and crush it with your partner</p>
+                </div>
+              )}
+
+              {/* Completed Goals */}
+              {completedGoals.length > 0 && (
+                <div style={{ marginTop: 40 }}>
+                  <h2 style={{ color: '#fff', fontWeight: 700, fontSize: '1.125rem', marginBottom: 16 }}>Completed Goals 🎉</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {completedGoals.map(g => (
+                      <div key={g.id} style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(74,222,128,0.2)', opacity: 0.85 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(74,222,128,0.12)', flexShrink: 0, fontSize: 18 }}>
+                              ✓
+                            </div>
+                            <div>
+                              <p style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>{g.title}</p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                {g.shared ? (
+                                  <><Users size={12} style={{ color: '#4ade80' }} /><span style={{ color: '#4ade80', fontSize: 12 }}>Shared with partner</span></>
+                                ) : (
+                                  <><Lock size={12} style={{ color: '#A0A0A0' }} /><span style={{ color: '#A0A0A0', fontSize: 12 }}>Private</span></>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ color: '#4ade80', fontWeight: 900, fontSize: 20 }}>100%</p>
+                            <p style={{ color: '#A0A0A0', fontSize: 12 }}>{g.current} / {g.target} {g.unit}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
     </>
   )

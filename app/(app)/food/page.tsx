@@ -133,34 +133,54 @@ export default function FoodPage() {
 
         {/* Daily summary */}
         <div style={{ marginBottom: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-          <h2 className="text-white font-bold mb-5">Today&apos;s Summary</h2>
-          <div className="food-macro-grid">
+          <h2 style={{ color: '#fff', fontWeight: 700, marginBottom: 20 }}>Today&apos;s Summary</h2>
+          {/* Calories - centered on top */}
+          {(() => {
+            const pct = Math.min(100, Math.round((totals.calories / 2000) * 100))
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
+                <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 12 }}>
+                  <svg style={{ width: 80, height: 80, transform: 'rotate(-90deg)' }} viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="26" fill="none" stroke="#2A2A2A" strokeWidth="6" />
+                    <circle cx="32" cy="32" r="26" fill="none" stroke="#E8002D" strokeWidth="6"
+                      strokeDasharray={`${pct * 1.634} 163.4`} strokeLinecap="round" />
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{pct}%</span>
+                  </div>
+                </div>
+                <p style={{ color: '#fff', fontWeight: 900, fontSize: 28 }}>{totals.calories}</p>
+                <p style={{ color: '#A0A0A0', fontSize: 13 }}>Calories (kcal)</p>
+                <p style={{ color: '#E8002D', fontSize: 12, marginTop: 4 }}>of 2000 kcal</p>
+              </div>
+            )
+          })()}
+          {/* Protein, Carbs, Fat - 3 col */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {[
-              { label: 'Calories', value: totals.calories, unit: 'kcal', color: '#E8002D', goal: 2000 },
               { label: 'Protein', value: totals.protein, unit: 'g', color: '#3b82f6', goal: 150 },
               { label: 'Carbs', value: totals.carbs, unit: 'g', color: '#f59e0b', goal: 200 },
               { label: 'Fat', value: totals.fat, unit: 'g', color: '#8b5cf6', goal: 65 },
-            ].map(item => (
-              <div key={item.label} className="text-center">
-                <div className="relative w-16 h-16 mx-auto mb-3">
-                  <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                    <circle cx="32" cy="32" r="26" fill="none" stroke="#2A2A2A" strokeWidth="6" />
-                    <circle
-                      cx="32" cy="32" r="26" fill="none"
-                      stroke={item.color} strokeWidth="6"
-                      strokeDasharray={`${Math.min(100, Math.round((item.value / item.goal) * 100)) * 1.634} 163.4`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-white">{Math.min(100, Math.round((item.value / item.goal) * 100))}%</span>
+            ].map(item => {
+              const pct = Math.min(100, Math.round((item.value / item.goal) * 100))
+              return (
+                <div key={item.label} style={{ textAlign: 'center' }}>
+                  <div style={{ position: 'relative', width: 64, height: 64, margin: '0 auto 10px' }}>
+                    <svg style={{ width: 64, height: 64, transform: 'rotate(-90deg)' }} viewBox="0 0 64 64">
+                      <circle cx="32" cy="32" r="26" fill="none" stroke="#2A2A2A" strokeWidth="6" />
+                      <circle cx="32" cy="32" r="26" fill="none" stroke={item.color} strokeWidth="6"
+                        strokeDasharray={`${pct * 1.634} 163.4`} strokeLinecap="round" />
+                    </svg>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{pct}%</span>
+                    </div>
                   </div>
+                  <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{item.value}</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 12 }}>{item.label} ({item.unit})</p>
+                  <p style={{ color: item.color, fontSize: 11, marginTop: 2 }}>of {item.goal}{item.unit}</p>
                 </div>
-                <p className="text-white font-black text-lg">{item.value}</p>
-                <p className="text-xs" style={{ color: '#A0A0A0' }}>{item.label} ({item.unit})</p>
-                <p className="text-xs mt-0.5" style={{ color: item.color }}>of {item.goal}{item.unit}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

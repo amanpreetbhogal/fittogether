@@ -125,7 +125,7 @@ export default function PartnerPage() {
               <BarChart data={partnerWorkoutHistory}>
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                 <Bar dataKey="calories" fill="#E8002D" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

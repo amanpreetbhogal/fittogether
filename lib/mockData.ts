@@ -1,21 +1,21 @@
 export const mockWorkoutHistory = [
-  { date: 'Mon', calories: 420, duration: 52 },
-  { date: 'Tue', calories: 0, duration: 0 },
-  { date: 'Wed', calories: 380, duration: 45 },
-  { date: 'Thu', calories: 510, duration: 61 },
-  { date: 'Fri', calories: 290, duration: 38 },
-  { date: 'Sat', calories: 640, duration: 75 },
-  { date: 'Sun', calories: 0, duration: 0 },
+  { date: 'Mon', calories: 420, partnerCalories: 380, duration: 52 },
+  { date: 'Tue', calories: 0, partnerCalories: 450, duration: 0 },
+  { date: 'Wed', calories: 380, partnerCalories: 310, duration: 45 },
+  { date: 'Thu', calories: 510, partnerCalories: 520, duration: 61 },
+  { date: 'Fri', calories: 290, partnerCalories: 400, duration: 38 },
+  { date: 'Sat', calories: 640, partnerCalories: 580, duration: 75 },
+  { date: 'Sun', calories: 0, partnerCalories: 290, duration: 0 },
 ]
 
 export const mockNutritionHistory = [
-  { date: 'Mon', calories: 1840, protein: 142, carbs: 180, fat: 62 },
-  { date: 'Tue', calories: 2100, protein: 158, carbs: 210, fat: 71 },
-  { date: 'Wed', calories: 1920, protein: 148, carbs: 195, fat: 65 },
-  { date: 'Thu', calories: 2050, protein: 162, carbs: 205, fat: 68 },
-  { date: 'Fri', calories: 1780, protein: 135, carbs: 172, fat: 59 },
-  { date: 'Sat', calories: 2200, protein: 170, carbs: 220, fat: 74 },
-  { date: 'Sun', calories: 1950, protein: 150, carbs: 198, fat: 66 },
+  { date: 'Mon', calories: 1840, partnerCalories: 1680, protein: 142, carbs: 180, fat: 62 },
+  { date: 'Tue', calories: 2100, partnerCalories: 1950, protein: 158, carbs: 210, fat: 71 },
+  { date: 'Wed', calories: 1920, partnerCalories: 2080, protein: 148, carbs: 195, fat: 65 },
+  { date: 'Thu', calories: 2050, partnerCalories: 1870, protein: 162, carbs: 205, fat: 68 },
+  { date: 'Fri', calories: 1780, partnerCalories: 2200, protein: 135, carbs: 172, fat: 59 },
+  { date: 'Sat', calories: 2200, partnerCalories: 1990, protein: 170, carbs: 220, fat: 74 },
+  { date: 'Sun', calories: 1950, partnerCalories: 1820, protein: 150, carbs: 198, fat: 66 },
 ]
 
 export const mockRecentWorkouts = [
