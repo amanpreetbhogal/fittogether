@@ -1,12 +1,17 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Flame, Dumbbell, Target, Zap } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 import StatCard from '@/components/StatCard'
 import NudgeButton from '@/components/NudgeButton'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { mockWorkoutHistory, mockNutritionHistory, mockRecentWorkouts, mockPartner, mockGoals } from '@/lib/mockData'
+import type { Database } from '@/lib/database.types'
+import { supabase } from '@/lib/supabase'
+import { mockWorkoutHistory, mockNutritionHistory, mockRecentWorkouts, mockPartner } from '@/lib/mockData'
 import Link from 'next/link'
+
+type GoalRow = Database['public']['Tables']['goals']['Row']
 
 type ChartTooltipPayload = {
   dataKey?: string
@@ -53,8 +58,44 @@ const LineTooltip = ({ active, payload, label }: ChartTooltipProps) => {
 }
 
 export default function DashboardPage() {
-  const { profile } = useAuth()
+  const { profile, user, loading: authLoading } = useAuth()
   const firstName = profile?.display_name?.split(' ')[0] ?? 'there'
+  const [goals, setGoals] = useState<GoalRow[]>([])
+  const [loadingGoals, setLoadingGoals] = useState(true)
+
+  useEffect(() => {
+    const loadGoals = async () => {
+      if (!user) {
+        setGoals([])
+        setLoadingGoals(false)
+        return
+      }
+
+      setLoadingGoals(true)
+
+      const { data, error } = await supabase
+        .from('goals')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to load dashboard goals', error)
+        setGoals([])
+        setLoadingGoals(false)
+        return
+      }
+
+      setGoals(data)
+      setLoadingGoals(false)
+    }
+
+    if (!authLoading) {
+      void loadGoals()
+    }
+  }, [authLoading, user])
+
+  const activeGoalCount = goals.filter(goal => goal.status === 'active').length
+  const dashboardGoals = goals.slice(0, 2)
 
   return (
     <>
@@ -90,7 +131,7 @@ export default function DashboardPage() {
         <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <StatCard label="Calories Burned" value="2,240" unit="kcal" icon={<Flame size={16} />} accent change="12% vs last week" changePositive />
           <StatCard label="Workouts This Week" value="4" unit="sessions" icon={<Dumbbell size={16} />} change="1 more than last week" changePositive />
-          <StatCard label="Active Goals" value="3" unit="goals" icon={<Target size={16} />} />
+          <StatCard label="Active Goals" value={loadingGoals ? '...' : activeGoalCount} unit="goals" icon={<Target size={16} />} />
           <StatCard label="My Streak" value="3" unit="days" icon={<Zap size={16} />} accent change="Keep it going!" changePositive />
         </div>
 
@@ -247,22 +288,35 @@ export default function DashboardPage() {
                 <h2 style={{ color: '#fff', fontWeight: 600 }}>Goals</h2>
                 <Link href="/goals" style={{ color: '#E8002D', fontSize: 13, fontWeight: 600, letterSpacing: '0.2px' }}>All goals</Link>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {mockGoals.slice(0, 2).map(g => {
-                  const pct = Math.min(100, Math.round((g.current / g.target) * 100))
-                  return (
-                    <div key={g.id}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ color: '#fff', fontSize: 14 }}>{g.title}</span>
-                        <span style={{ color: '#E8002D', fontWeight: 700, fontSize: 14 }}>{pct}%</span>
+              {loadingGoals ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading goals...</p>
+              ) : dashboardGoals.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>No goals yet. Create your first goal to see it here.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {dashboardGoals.map(goal => {
+                    const pct = Math.min(100, Math.round((Number(goal.current_value) / Number(goal.target_value)) * 100))
+                    return (
+                      <div key={goal.id}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ color: '#fff', fontSize: 14 }}>{goal.title}</span>
+                          <span style={{ color: goal.status === 'completed' ? '#4ade80' : '#E8002D', fontWeight: 700, fontSize: 14 }}>{pct}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: 6, borderRadius: 6, backgroundColor: '#2A2A2A' }}>
+                          <div
+                            style={{
+                              height: 6,
+                              borderRadius: 6,
+                              width: `${pct}%`,
+                              backgroundColor: goal.status === 'completed' ? '#4ade80' : '#E8002D',
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div style={{ width: '100%', height: 6, borderRadius: 6, backgroundColor: '#2A2A2A' }}>
-                        <div style={{ height: 6, borderRadius: 6, width: `${pct}%`, backgroundColor: '#E8002D' }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
