@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react'
+import { useAuth } from '@/components/auth/AuthProvider'
+import { supabase } from '@/lib/supabase'
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -11,16 +13,65 @@ export default function AuthPage() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, router, user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    // Simulate auth - replace with Supabase auth
-    setTimeout(() => {
+    setErrorMessage(null)
+    setSuccessMessage(null)
+
+    try {
+      if (mode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (error) {
+          throw error
+        }
+
+        router.push('/dashboard')
+        return
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: name.trim(),
+          },
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      if (data.session) {
+        router.push('/dashboard')
+        return
+      }
+
+      setSuccessMessage('Account created. Check your email to confirm your signup, then log in.')
+      setMode('login')
+      setPassword('')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Authentication failed.')
+    } finally {
       setLoading(false)
-      router.push('/dashboard')
-    }, 1000)
+    }
   }
 
   return (
@@ -80,6 +131,18 @@ export default function AuthPage() {
           <p className="mb-8" style={{ color: '#A0A0A0' }}>
             {mode === 'login' ? "Sign in to your account" : "Start your journey with your partner"}
           </p>
+
+          {errorMessage && (
+            <div style={{ marginBottom: 16, backgroundColor: 'rgba(232,0,45,0.12)', border: '0.5px solid rgba(232,0,45,0.4)', color: '#ffffff', borderRadius: 10, padding: 12, fontSize: 13 }}>
+              {errorMessage}
+            </div>
+          )}
+
+          {successMessage && (
+            <div style={{ marginBottom: 16, backgroundColor: 'rgba(74,222,128,0.12)', border: '0.5px solid rgba(74,222,128,0.35)', color: '#ffffff', borderRadius: 10, padding: 12, fontSize: 13 }}>
+              {successMessage}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
@@ -171,7 +234,7 @@ export default function AuthPage() {
                 marginTop: '8px',
               }}
             >
-              {loading ? 'Signing in...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              {loading ? (mode === 'login' ? 'Signing in...' : 'Creating account...') : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
@@ -182,19 +245,22 @@ export default function AuthPage() {
           </div>
 
           <div className="mt-4 space-y-3">
-            {['Continue with Google', 'Continue with Apple'].map((label) => (
+            {['Google and Apple login coming soon', 'Supabase email auth is active now'].map((label) => (
               <button
                 key={label}
+                type="button"
+                disabled
                 style={{
                   backgroundColor: '#1E1E1E',
-                  color: '#ffffff',
+                  color: '#A0A0A0',
                   border: '0.5px solid rgba(255,255,255,0.08)',
                   borderRadius: '10px',
                   padding: '13px',
                   width: '100%',
                   fontSize: '14px',
                   fontWeight: '500',
-                  cursor: 'pointer',
+                  cursor: 'not-allowed',
+                  opacity: 0.7,
                 }}
               >
                 {label}
@@ -205,6 +271,7 @@ export default function AuthPage() {
           <p className="mt-8 text-center text-sm" style={{ color: '#A0A0A0' }}>
             {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
             <button
+              type="button"
               onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
               style={{ color: '#E8002D', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}
             >

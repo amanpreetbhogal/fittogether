@@ -1,9 +1,9 @@
 'use client'
 
-import { Zap, Dumbbell, Flame, Target, Trophy } from 'lucide-react'
+import { Dumbbell, Flame, Target, Trophy } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import NudgeButton from '@/components/NudgeButton'
-import { mockWorkoutHistory, mockPartner, mockGoals, mockRecentWorkouts } from '@/lib/mockData'
+import { mockPartner, mockGoals } from '@/lib/mockData'
 
 const partnerWorkoutHistory = [
   { date: 'Mon', calories: 380 },
@@ -15,7 +15,13 @@ const partnerWorkoutHistory = [
   { date: 'Sun', calories: 290 },
 ]
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+type PartnerTooltipProps = {
+  active?: boolean
+  payload?: Array<{ value?: number | string }>
+  label?: string
+}
+
+const CustomTooltip = ({ active, payload, label }: PartnerTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>

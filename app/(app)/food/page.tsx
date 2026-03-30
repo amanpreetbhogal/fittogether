@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Plus, Flame, X } from 'lucide-react'
+import { Search, Flame, X } from 'lucide-react'
 
 interface FoodResult {
   product_name: string

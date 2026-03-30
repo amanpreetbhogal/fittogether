@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock, Flame } from 'lucide-react'
+import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock } from 'lucide-react'
 import { mockRecentWorkouts } from '@/lib/mockData'
 
 interface SearchedExercise {

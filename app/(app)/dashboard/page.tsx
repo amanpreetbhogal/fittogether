@@ -4,15 +4,28 @@ import { Flame, Dumbbell, Target, Zap } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 import StatCard from '@/components/StatCard'
 import NudgeButton from '@/components/NudgeButton'
+import { useAuth } from '@/components/auth/AuthProvider'
 import { mockWorkoutHistory, mockNutritionHistory, mockRecentWorkouts, mockPartner, mockGoals } from '@/lib/mockData'
 import Link from 'next/link'
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+type ChartTooltipPayload = {
+  dataKey?: string
+  name?: string
+  value?: number | string
+}
+
+type ChartTooltipProps = {
+  active?: boolean
+  payload?: ChartTooltipPayload[]
+  label?: string
+}
+
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
         <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
-        {payload.map((p: any) => (
+        {payload.map((p) => (
           <p key={p.dataKey} style={{ color: p.dataKey === 'calories' ? '#ffffff' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
             {p.value} kcal · {p.name}
           </p>
@@ -23,12 +36,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-const LineTooltip = ({ active, payload, label }: any) => {
+const LineTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
         <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
-        {payload.map((p: any) => (
+        {payload.map((p) => (
           <p key={p.dataKey} style={{ color: p.dataKey === 'calories' ? '#ffffff' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
             {p.value} kcal · {p.name}
           </p>
@@ -40,6 +53,9 @@ const LineTooltip = ({ active, payload, label }: any) => {
 }
 
 export default function DashboardPage() {
+  const { profile } = useAuth()
+  const firstName = profile?.display_name?.split(' ')[0] ?? 'there'
+
   return (
     <>
       <style>{`
@@ -64,7 +80,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="dash-header">
           <div>
-            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Good morning, Amanpreet 👋</h1>
+            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Good morning, {firstName} 👋</h1>
             <p style={{ color: '#A0A0A0', marginTop: 4 }}>Sunday, March 29 · Active streak: <span style={{ color: '#E8002D', fontWeight: 700 }}>3 days</span></p>
           </div>
           <NudgeButton partnerName="Priyana" />

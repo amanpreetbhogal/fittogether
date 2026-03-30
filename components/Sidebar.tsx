@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, Dumbbell, UtensilsCrossed, Target, Users, LogOut, Menu, X } from 'lucide-react'
+import { useAuth } from '@/components/auth/AuthProvider'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -15,7 +16,23 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { profile, user, signOut } = useAuth()
+
+  const displayName = profile?.display_name ?? user?.user_metadata?.display_name ?? 'FitTogether User'
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'FT'
+
+  const handleSignOut = async () => {
+    await signOut()
+    setMobileOpen(false)
+    router.replace('/auth')
+  }
 
   const sidebarContent = (
     <>
@@ -80,21 +97,20 @@ export default function Sidebar() {
       <div style={{ padding: 16, borderTop: '0.5px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#fff', flexShrink: 0 }}>
-            AP
+            {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Amanpreet</p>
-            <p style={{ color: '#A0A0A0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>user@email.com</p>
+            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+            <p style={{ color: '#A0A0A0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email ?? 'No email loaded'}</p>
           </div>
         </div>
-        <Link
-          href="/auth"
-          onClick={() => setMobileOpen(false)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, color: '#A0A0A0', fontSize: 13, textDecoration: 'none' }}
+        <button
+          onClick={handleSignOut}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, color: '#A0A0A0', fontSize: 13, textDecoration: 'none', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
         >
           <LogOut size={15} />
           Sign out
-        </Link>
+        </button>
       </div>
     </>
   )
