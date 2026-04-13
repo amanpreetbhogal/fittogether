@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Flame, Dumbbell, Target, Zap } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 import StatCard from '@/components/StatCard'
@@ -8,10 +8,13 @@ import NudgeButton from '@/components/NudgeButton'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
-import { mockWorkoutHistory, mockNutritionHistory, mockRecentWorkouts, mockPartner } from '@/lib/mockData'
 import Link from 'next/link'
 
 type GoalRow = Database['public']['Tables']['goals']['Row']
+type WorkoutRow = Database['public']['Tables']['workouts']['Row']
+type FoodEntryRow = Database['public']['Tables']['food_entries']['Row']
+type ProfileRow = Database['public']['Tables']['profiles']['Row']
+type PartnershipRow = Database['public']['Tables']['partnerships']['Row']
 
 type ChartTooltipPayload = {
   dataKey?: string
@@ -25,77 +28,177 @@ type ChartTooltipProps = {
   label?: string
 }
 
-const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
-  if (active && payload && payload.length) {
-    return (
-      <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
-        <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
-        {payload.map((p) => (
-          <p key={p.dataKey} style={{ color: p.dataKey === 'calories' ? '#ffffff' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
-            {p.value} kcal · {p.name}
-          </p>
-        ))}
-      </div>
-    )
+const ChartTooltip = ({ active, payload, label }: ChartTooltipProps) => {
+  if (!active || !payload || payload.length === 0) {
+    return null
   }
-  return null
-}
 
-const LineTooltip = ({ active, payload, label }: ChartTooltipProps) => {
-  if (active && payload && payload.length) {
-    return (
-      <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
-        <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
-        {payload.map((p) => (
-          <p key={p.dataKey} style={{ color: p.dataKey === 'calories' ? '#ffffff' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
-            {p.value} kcal · {p.name}
-          </p>
-        ))}
-      </div>
-    )
-  }
-  return null
+  return (
+    <div style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
+      <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 4 }}>{label}</p>
+      {payload.map(item => (
+        <p key={item.dataKey} style={{ color: item.name === 'You' ? '#ffffff' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
+          {item.value} · {item.name}
+        </p>
+      ))}
+    </div>
+  )
 }
 
 export default function DashboardPage() {
   const { profile, user, loading: authLoading } = useAuth()
   const firstName = profile?.display_name?.split(' ')[0] ?? 'there'
+
+  const [loadingData, setLoadingData] = useState(true)
   const [goals, setGoals] = useState<GoalRow[]>([])
-  const [loadingGoals, setLoadingGoals] = useState(true)
+  const [yourWorkouts, setYourWorkouts] = useState<WorkoutRow[]>([])
+  const [yourFoodEntries, setYourFoodEntries] = useState<FoodEntryRow[]>([])
+  const [activePartnership, setActivePartnership] = useState<PartnershipRow | null>(null)
+  const [partnerProfile, setPartnerProfile] = useState<ProfileRow | null>(null)
+  const [partnerWorkouts, setPartnerWorkouts] = useState<WorkoutRow[]>([])
+  const [partnerFoodEntries, setPartnerFoodEntries] = useState<FoodEntryRow[]>([])
+
+  const loadDashboard = useCallback(async () => {
+    if (!user) {
+      setGoals([])
+      setYourWorkouts([])
+      setYourFoodEntries([])
+      setActivePartnership(null)
+      setPartnerProfile(null)
+      setPartnerWorkouts([])
+      setPartnerFoodEntries([])
+      setLoadingData(false)
+      return
+    }
+
+    setLoadingData(true)
+
+    const today = new Date()
+    const weekStart = startOfWeek(today)
+    const weekStartString = toDateString(weekStart)
+
+    const [goalsResult, workoutsResult, foodResult, partnershipsResult] = await Promise.all([
+      supabase.from('goals').select('*').order('created_at', { ascending: false }),
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('workout_date', { ascending: false })
+        .limit(20),
+      supabase
+        .from('food_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('entry_date', weekStartString)
+        .order('entry_date', { ascending: false }),
+      supabase
+        .from('partnerships')
+        .select('*')
+        .eq('status', 'active')
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .limit(1),
+    ])
+
+    if (goalsResult.error || workoutsResult.error || foodResult.error || partnershipsResult.error) {
+      console.error('Failed to load dashboard data', {
+        goalsError: goalsResult.error,
+        workoutsError: workoutsResult.error,
+        foodError: foodResult.error,
+        partnershipsError: partnershipsResult.error,
+      })
+      setLoadingData(false)
+      return
+    }
+
+    setGoals(goalsResult.data || [])
+    setYourWorkouts(workoutsResult.data || [])
+    setYourFoodEntries(foodResult.data || [])
+
+    const partnership = partnershipsResult.data?.[0] ?? null
+    setActivePartnership(partnership)
+
+    if (!partnership) {
+      setPartnerProfile(null)
+      setPartnerWorkouts([])
+      setPartnerFoodEntries([])
+      setLoadingData(false)
+      return
+    }
+
+    const partnerId = partnership.user_one_id === user.id ? partnership.user_two_id : partnership.user_one_id
+
+    const [partnerProfileResult, partnerWorkoutsResult, partnerFoodResult] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', partnerId).single(),
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', partnerId)
+        .order('workout_date', { ascending: false })
+        .limit(20),
+      supabase
+        .from('food_entries')
+        .select('*')
+        .eq('user_id', partnerId)
+        .gte('entry_date', weekStartString)
+        .order('entry_date', { ascending: false }),
+    ])
+
+    if (partnerProfileResult.error || partnerWorkoutsResult.error || partnerFoodResult.error) {
+      console.error('Failed to load partner dashboard data', {
+        partnerProfileError: partnerProfileResult.error,
+        partnerWorkoutsError: partnerWorkoutsResult.error,
+        partnerFoodError: partnerFoodResult.error,
+      })
+      setPartnerProfile(null)
+      setPartnerWorkouts([])
+      setPartnerFoodEntries([])
+      setLoadingData(false)
+      return
+    }
+
+    setPartnerProfile(partnerProfileResult.data)
+    setPartnerWorkouts(partnerWorkoutsResult.data || [])
+    setPartnerFoodEntries(partnerFoodResult.data || [])
+    setLoadingData(false)
+  }, [user])
 
   useEffect(() => {
-    const loadGoals = async () => {
-      if (!user) {
-        setGoals([])
-        setLoadingGoals(false)
-        return
-      }
-
-      setLoadingGoals(true)
-
-      const { data, error } = await supabase
-        .from('goals')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Failed to load dashboard goals', error)
-        setGoals([])
-        setLoadingGoals(false)
-        return
-      }
-
-      setGoals(data)
-      setLoadingGoals(false)
-    }
-
     if (!authLoading) {
-      void loadGoals()
+      const timeoutId = window.setTimeout(() => {
+        void loadDashboard()
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
     }
-  }, [authLoading, user])
+  }, [authLoading, loadDashboard])
 
   const activeGoalCount = goals.filter(goal => goal.status === 'active').length
   const dashboardGoals = goals.slice(0, 2)
+  const weeklyWorkoutCount = countWorkoutsThisWeek(yourWorkouts)
+  const workoutMinutesThisWeek = sumWorkoutMinutesThisWeek(yourWorkouts)
+  const workoutStreak = calculateWorkoutStreak(yourWorkouts)
+  const recentWorkouts = yourWorkouts.slice(0, 3)
+
+  const partnerId = activePartnership && user
+    ? activePartnership.user_one_id === user.id
+      ? activePartnership.user_two_id
+      : activePartnership.user_one_id
+    : null
+  const partnerName = partnerProfile?.display_name || 'your partner'
+  const partnerFirstName = partnerProfile?.display_name.split(' ')[0] || 'Partner'
+  const partnerInitials = getInitials(partnerProfile?.display_name || partnerProfile?.email || 'FT')
+  const partnerWorkoutCount = countWorkoutsThisWeek(partnerWorkouts)
+  const partnerStreak = calculateWorkoutStreak(partnerWorkouts)
+  const partnerWorkedOutToday = yourHasWorkoutOnDate(partnerWorkouts, toDateString(new Date()))
+
+  const weeklyWorkoutData = useMemo(
+    () => buildWeeklyWorkoutMinutes(yourWorkouts, partnerWorkouts),
+    [yourWorkouts, partnerWorkouts]
+  )
+  const nutritionData = useMemo(
+    () => buildWeeklyNutritionData(yourFoodEntries, partnerFoodEntries),
+    [yourFoodEntries, partnerFoodEntries]
+  )
 
   return (
     <>
@@ -118,189 +221,251 @@ export default function DashboardPage() {
         }
       `}</style>
       <div className="dash-wrapper">
-        {/* Header */}
         <div className="dash-header">
           <div>
-            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Good morning, {firstName} 👋</h1>
-            <p style={{ color: '#A0A0A0', marginTop: 4 }}>Sunday, March 29 · Active streak: <span style={{ color: '#E8002D', fontWeight: 700 }}>3 days</span></p>
+            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>
+              Good morning, {firstName} 👋
+            </h1>
+            <p style={{ color: '#A0A0A0', marginTop: 4 }}>
+              Your dashboard is showing live goals, workouts, food logs, and partner status.
+            </p>
           </div>
-          <NudgeButton partnerName="Priyana" />
+          {partnerId && user && partnerProfile ? (
+            <NudgeButton
+              partnerName={partnerFirstName}
+              senderId={user.id}
+              recipientId={partnerId}
+            />
+          ) : null}
         </div>
 
-        {/* Stat cards */}
         <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          <StatCard label="Calories Burned" value="2,240" unit="kcal" icon={<Flame size={16} />} accent change="12% vs last week" changePositive />
-          <StatCard label="Workouts This Week" value="4" unit="sessions" icon={<Dumbbell size={16} />} change="1 more than last week" changePositive />
-          <StatCard label="Active Goals" value={loadingGoals ? '...' : activeGoalCount} unit="goals" icon={<Target size={16} />} />
-          <StatCard label="My Streak" value="3" unit="days" icon={<Zap size={16} />} accent change="Keep it going!" changePositive />
+          <StatCard
+            label="Workout Minutes"
+            value={loadingData ? '...' : workoutMinutesThisWeek}
+            unit="min"
+            icon={<Flame size={16} />}
+            accent
+            change="This week"
+            changePositive
+          />
+          <StatCard
+            label="Workouts This Week"
+            value={loadingData ? '...' : weeklyWorkoutCount}
+            unit="sessions"
+            icon={<Dumbbell size={16} />}
+            change={weeklyWorkoutCount > 0 ? 'Live from your workout log' : 'Log your first workout'}
+            changePositive={weeklyWorkoutCount > 0}
+          />
+          <StatCard
+            label="Active Goals"
+            value={loadingData ? '...' : activeGoalCount}
+            unit="goals"
+            icon={<Target size={16} />}
+          />
+          <StatCard
+            label="My Streak"
+            value={loadingData ? '...' : workoutStreak}
+            unit="days"
+            icon={<Zap size={16} />}
+            accent
+            change={workoutStreak > 0 ? 'Based on workout dates' : 'Start with one workout'}
+            changePositive={workoutStreak > 0}
+          />
         </div>
 
-        {/* Charts row */}
         <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-            <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Weekly Calories Burned</h2>
-            <p style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 14 }}>You vs Partner</p>
+            <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Weekly Workout Minutes</h2>
+            <p style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 14 }}>
+              {partnerProfile ? 'You vs your partner' : 'Your activity this week'}
+            </p>
             <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#ffffff' }} />
                 <span style={{ fontSize: 12, color: '#A0A0A0' }}>You</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#E8002D' }} />
-                <span style={{ fontSize: 12, color: '#A0A0A0' }}>Priyana</span>
-              </div>
+              {partnerProfile ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#E8002D' }} />
+                  <span style={{ fontSize: 12, color: '#A0A0A0' }}>{partnerFirstName}</span>
+                </div>
+              ) : null}
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={mockWorkoutHistory} barGap={4}>
+              <BarChart data={weeklyWorkoutData} barGap={4}>
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                <Bar dataKey="calories" name="You" fill="#ffffff" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="partnerCalories" name="Priyana" fill="#E8002D" radius={[4, 4, 0, 0]} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                <Bar dataKey="you" name="You" fill="#ffffff" radius={[4, 4, 0, 0]} />
+                {partnerProfile ? <Bar dataKey="partner" name={partnerFirstName} fill="#E8002D" radius={[4, 4, 0, 0]} /> : null}
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Calorie Intake</h2>
-            <p style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 14 }}>Daily totals this week</p>
+            <p style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 14 }}>
+              {partnerProfile ? 'Daily totals this week' : 'Your logged food totals this week'}
+            </p>
             <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ffffff' }} />
                 <span style={{ fontSize: 12, color: '#A0A0A0' }}>You</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#E8002D' }} />
-                <span style={{ fontSize: 12, color: '#A0A0A0' }}>Priyana</span>
-              </div>
+              {partnerProfile ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#E8002D' }} />
+                  <span style={{ fontSize: 12, color: '#A0A0A0' }}>{partnerFirstName}</span>
+                </div>
+              ) : null}
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={mockNutritionHistory}>
+              <LineChart data={nutritionData}>
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<LineTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1 }} />
-                <Line type="monotone" dataKey="calories" name="You" stroke="#ffffff" strokeWidth={2} dot={{ fill: '#ffffff', r: 4 }} activeDot={{ fill: '#E8002D', r: 6 }} />
-                <Line type="monotone" dataKey="partnerCalories" name="Priyana" stroke="#E8002D" strokeWidth={2} dot={{ fill: '#E8002D', r: 4 }} activeDot={{ fill: '#E8002D', r: 6 }} />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1 }} />
+                <Line type="monotone" dataKey="you" name="You" stroke="#ffffff" strokeWidth={2} dot={{ fill: '#ffffff', r: 4 }} activeDot={{ fill: '#ffffff', r: 6 }} />
+                {partnerProfile ? (
+                  <Line type="monotone" dataKey="partner" name={partnerFirstName} stroke="#E8002D" strokeWidth={2} dot={{ fill: '#E8002D', r: 4 }} activeDot={{ fill: '#E8002D', r: 6 }} />
+                ) : null}
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Bottom row */}
         <div className="dash-bottom">
-          {/* Recent Workouts - narrow (1 col) */}
           <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem' }}>Recent Workouts</h2>
               <Link href="/workout" style={{ color: '#E8002D', fontSize: 14, fontWeight: 600, letterSpacing: '0.2px' }}>View all</Link>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {mockRecentWorkouts.map(w => (
-                <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 10, backgroundColor: '#252525' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,0,45,0.12)', flexShrink: 0 }}>
-                    <Dumbbell size={16} style={{ color: '#E8002D' }} />
+            {recentWorkouts.length === 0 ? (
+              <p style={{ color: '#A0A0A0', fontSize: 14 }}>No workouts yet. Start logging to see them here.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {recentWorkouts.map(workout => (
+                  <div key={workout.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 10, backgroundColor: '#252525' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,0,45,0.12)', flexShrink: 0 }}>
+                      <Dumbbell size={16} style={{ color: '#E8002D' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: '#fff', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {workout.title}
+                      </p>
+                      <p style={{ color: '#A0A0A0', fontSize: 12 }}>{workout.duration_minutes} min</p>
+                    </div>
+                    <span style={{ color: '#A0A0A0', fontSize: 11, flexShrink: 0 }}>{workout.workout_date}</span>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ color: '#fff', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</p>
-                    <p style={{ color: '#A0A0A0', fontSize: 12 }}>{w.exercises.length} ex · {w.duration_minutes} min</p>
-                  </div>
-                  <span style={{ color: '#A0A0A0', fontSize: 11, flexShrink: 0 }}>{w.date}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Partner Activity + Goals - wide (span 2) */}
           <div className="dash-wide" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Partner Activity with Head-to-Head */}
             <div style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ color: '#fff', fontWeight: 600 }}>Partner Activity</h2>
                 <Link href="/partner" style={{ color: '#E8002D', fontSize: 13, fontWeight: 600, letterSpacing: '0.2px' }}>View</Link>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                {/* Left: partner info + stats */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', backgroundColor: '#E8002D', flexShrink: 0, fontSize: 13 }}>
-                      {mockPartner.avatar}
-                    </div>
-                    <div>
-                      <p style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>{mockPartner.name}</p>
-                      <p style={{ color: '#4ade80', fontSize: 12 }}>✓ Worked out today</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div style={{ borderRadius: 10, padding: 12, textAlign: 'center', backgroundColor: '#252525' }}>
-                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{mockPartner.streak}</p>
-                      <p style={{ color: '#A0A0A0', fontSize: 11 }}>Day streak</p>
-                    </div>
-                    <div style={{ borderRadius: 10, padding: 12, textAlign: 'center', backgroundColor: '#252525' }}>
-                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{mockPartner.weeklyWorkouts}</p>
-                      <p style={{ color: '#A0A0A0', fontSize: 11 }}>This week</p>
-                    </div>
-                  </div>
+
+              {!partnerProfile ? (
+                <div style={{ padding: 18, borderRadius: 12, backgroundColor: '#252525' }}>
+                  <p style={{ color: '#fff', fontWeight: 600, marginBottom: 6 }}>No partner connected yet</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 14, marginBottom: 12 }}>
+                    Invite your partner from the partner page to unlock nudges, comparisons, and shared accountability.
+                  </p>
+                  <Link href="/partner" style={{ color: '#E8002D', fontSize: 14, fontWeight: 600 }}>
+                    Set up partner connection
+                  </Link>
                 </div>
-                {/* Right: Head-to-Head */}
-                <div>
-                  <p style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Head-to-Head</p>
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffffff' }} />
-                      <span style={{ fontSize: 11, color: '#A0A0A0' }}>You</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#E8002D' }} />
-                      <span style={{ fontSize: 11, color: '#A0A0A0' }}>Priyana</span>
-                    </div>
-                  </div>
-                  {[
-                    { label: 'Weekly Workouts', you: 4, partner: mockPartner.weeklyWorkouts },
-                    { label: 'Avg Cal Burned', you: 378, partner: 419 },
-                    { label: 'Current Streak', you: 3, partner: mockPartner.streak },
-                  ].map(item => {
-                    const total = item.you + item.partner || 1
-                    const youPct = Math.round((item.you / total) * 100)
-                    return (
-                      <div key={item.label} style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                          <span style={{ fontSize: 11, color: '#A0A0A0' }}>{item.label}</span>
-                          <span style={{ fontSize: 11, color: '#A0A0A0' }}>
-                            <span style={{ color: '#fff' }}>{item.you}</span>
-                            {' vs '}
-                            <span style={{ color: '#E8002D' }}>{item.partner}</span>
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', height: 4, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
-                          <div style={{ width: `${youPct}%`, backgroundColor: '#ffffff', borderRadius: '4px 0 0 4px' }} />
-                          <div style={{ width: `${100 - youPct}%`, backgroundColor: '#E8002D', borderRadius: '0 4px 4px 0' }} />
-                        </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', backgroundColor: '#E8002D', flexShrink: 0, fontSize: 13 }}>
+                        {partnerInitials}
                       </div>
-                    )
-                  })}
+                      <div>
+                        <p style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>{partnerName}</p>
+                        <p style={{ color: partnerWorkedOutToday ? '#4ade80' : '#A0A0A0', fontSize: 12 }}>
+                          {partnerWorkedOutToday ? 'Worked out today' : 'No workout logged today'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div style={{ borderRadius: 10, padding: 12, textAlign: 'center', backgroundColor: '#252525' }}>
+                        <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{partnerStreak}</p>
+                        <p style={{ color: '#A0A0A0', fontSize: 11 }}>Day streak</p>
+                      </div>
+                      <div style={{ borderRadius: 10, padding: 12, textAlign: 'center', backgroundColor: '#252525' }}>
+                        <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{partnerWorkoutCount}</p>
+                        <p style={{ color: '#A0A0A0', fontSize: 11 }}>This week</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Head-to-Head</p>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                        <span style={{ fontSize: 11, color: '#A0A0A0' }}>You</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#E8002D' }} />
+                        <span style={{ fontSize: 11, color: '#A0A0A0' }}>{partnerFirstName}</span>
+                      </div>
+                    </div>
+                    {[
+                      { label: 'Weekly Workouts', you: weeklyWorkoutCount, partner: partnerWorkoutCount },
+                      { label: 'Workout Minutes', you: workoutMinutesThisWeek, partner: sumWorkoutMinutesThisWeek(partnerWorkouts) },
+                      { label: 'Current Streak', you: workoutStreak, partner: partnerStreak },
+                    ].map(item => {
+                      const total = item.you + item.partner || 1
+                      const youPct = Math.round((item.you / total) * 100)
+                      return (
+                        <div key={item.label} style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                            <span style={{ fontSize: 11, color: '#A0A0A0' }}>{item.label}</span>
+                            <span style={{ fontSize: 11, color: '#A0A0A0' }}>
+                              <span style={{ color: '#fff' }}>{item.you}</span>
+                              {' vs '}
+                              <span style={{ color: '#E8002D' }}>{item.partner}</span>
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', height: 4, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
+                            <div style={{ width: `${youPct}%`, backgroundColor: '#ffffff', borderRadius: '4px 0 0 4px' }} />
+                            <div style={{ width: `${100 - youPct}%`, backgroundColor: '#E8002D', borderRadius: '0 4px 4px 0' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Goals */}
             <div style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ color: '#fff', fontWeight: 600 }}>Goals</h2>
                 <Link href="/goals" style={{ color: '#E8002D', fontSize: 13, fontWeight: 600, letterSpacing: '0.2px' }}>All goals</Link>
               </div>
-              {loadingGoals ? (
+              {loadingData ? (
                 <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading goals...</p>
               ) : dashboardGoals.length === 0 ? (
                 <p style={{ color: '#A0A0A0', fontSize: 14 }}>No goals yet. Create your first goal to see it here.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {dashboardGoals.map(goal => {
-                    const pct = Math.min(100, Math.round((Number(goal.current_value) / Number(goal.target_value)) * 100))
+                    const pct = Math.min(100, Math.round((Number(goal.current_value) / Math.max(Number(goal.target_value), 1)) * 100))
                     return (
                       <div key={goal.id}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                           <span style={{ color: '#fff', fontSize: 14 }}>{goal.title}</span>
-                          <span style={{ color: goal.status === 'completed' ? '#4ade80' : '#E8002D', fontWeight: 700, fontSize: 14 }}>{pct}%</span>
+                          <span style={{ color: goal.status === 'completed' ? '#4ade80' : '#E8002D', fontWeight: 700, fontSize: 14 }}>
+                            {pct}%
+                          </span>
                         </div>
                         <div style={{ width: '100%', height: 6, borderRadius: 6, backgroundColor: '#2A2A2A' }}>
                           <div
@@ -323,4 +488,112 @@ export default function DashboardPage() {
       </div>
     </>
   )
+}
+
+function startOfWeek(reference: Date) {
+  const date = new Date(reference)
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() + diff)
+  return date
+}
+
+function toDateString(value: Date) {
+  return value.toISOString().slice(0, 10)
+}
+
+function countWorkoutsThisWeek(workouts: WorkoutRow[]) {
+  const start = startOfWeek(new Date())
+  return workouts.filter(workout => new Date(workout.workout_date) >= start).length
+}
+
+function sumWorkoutMinutesThisWeek(workouts: WorkoutRow[]) {
+  const start = startOfWeek(new Date())
+  return workouts
+    .filter(workout => new Date(workout.workout_date) >= start)
+    .reduce((sum, workout) => sum + workout.duration_minutes, 0)
+}
+
+function buildWeeklyWorkoutMinutes(yourWorkouts: WorkoutRow[], partnerWorkouts: WorkoutRow[]) {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const monday = startOfWeek(new Date())
+
+  return labels.map((label, index) => {
+    const day = new Date(monday)
+    day.setDate(monday.getDate() + index)
+    const dateString = toDateString(day)
+
+    return {
+      date: label,
+      you: yourWorkouts
+        .filter(workout => workout.workout_date === dateString)
+        .reduce((sum, workout) => sum + workout.duration_minutes, 0),
+      partner: partnerWorkouts
+        .filter(workout => workout.workout_date === dateString)
+        .reduce((sum, workout) => sum + workout.duration_minutes, 0),
+    }
+  })
+}
+
+function buildWeeklyNutritionData(yourEntries: FoodEntryRow[], partnerEntries: FoodEntryRow[]) {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const monday = startOfWeek(new Date())
+
+  return labels.map((label, index) => {
+    const day = new Date(monday)
+    day.setDate(monday.getDate() + index)
+    const dateString = toDateString(day)
+
+    return {
+      date: label,
+      you: yourEntries
+        .filter(entry => entry.entry_date === dateString)
+        .reduce((sum, entry) => sum + entry.calories, 0),
+      partner: partnerEntries
+        .filter(entry => entry.entry_date === dateString)
+        .reduce((sum, entry) => sum + entry.calories, 0),
+    }
+  })
+}
+
+function calculateWorkoutStreak(workouts: WorkoutRow[]) {
+  const uniqueDates = new Set(workouts.map(workout => workout.workout_date))
+  let streak = 0
+  const currentDate = new Date()
+
+  while (true) {
+    const dateString = toDateString(currentDate)
+    if (!uniqueDates.has(dateString)) {
+      if (streak === 0) {
+        currentDate.setDate(currentDate.getDate() - 1)
+        const yesterdayString = toDateString(currentDate)
+        if (!uniqueDates.has(yesterdayString)) {
+          return 0
+        }
+        streak += 1
+      } else {
+        break
+      }
+    } else {
+      streak += 1
+    }
+
+    currentDate.setDate(currentDate.getDate() - 1)
+  }
+
+  return streak
+}
+
+function getInitials(value: string) {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+function yourHasWorkoutOnDate(workouts: WorkoutRow[], dateString: string) {
+  return workouts.some(workout => workout.workout_date === dateString)
 }

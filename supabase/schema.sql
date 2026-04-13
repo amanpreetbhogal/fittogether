@@ -143,6 +143,70 @@ as $$
   );
 $$;
 
+create or replace function public.user_has_active_partner(target_user_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.partnerships
+    where status = 'active'
+      and target_user_id in (user_one_id, user_two_id)
+  );
+$$;
+
+create or replace function public.enforce_single_active_partnership()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'active' then
+    if exists (
+      select 1
+      from public.partnerships existing
+      where existing.status = 'active'
+        and existing.id <> new.id
+        and (
+          new.user_one_id in (existing.user_one_id, existing.user_two_id)
+          or new.user_two_id in (existing.user_one_id, existing.user_two_id)
+        )
+    ) then
+      raise exception 'Each user can only have one active partner.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_invite_partner_availability()
+returns trigger
+language plpgsql
+as $$
+declare
+  recipient_profile_id uuid;
+begin
+  if new.status = 'pending' then
+    if public.user_has_active_partner(new.sender_id) then
+      raise exception 'You already have an active partner.';
+    end if;
+
+    select id
+    into recipient_profile_id
+    from public.profiles
+    where lower(email) = lower(new.recipient_email)
+    limit 1;
+
+    if recipient_profile_id is not null and public.user_has_active_partner(recipient_profile_id) then
+      raise exception 'That person already has an active partner.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -188,9 +252,19 @@ drop trigger if exists partnerships_touch_updated_at on public.partnerships;
 create trigger partnerships_touch_updated_at before update on public.partnerships
   for each row execute procedure public.touch_updated_at();
 
+drop trigger if exists partnerships_enforce_single_active on public.partnerships;
+create trigger partnerships_enforce_single_active
+  before insert or update on public.partnerships
+  for each row execute procedure public.enforce_single_active_partnership();
+
 drop trigger if exists partnership_invites_touch_updated_at on public.partnership_invites;
 create trigger partnership_invites_touch_updated_at before update on public.partnership_invites
   for each row execute procedure public.touch_updated_at();
+
+drop trigger if exists partnership_invites_enforce_partner_availability on public.partnership_invites;
+create trigger partnership_invites_enforce_partner_availability
+  before insert or update on public.partnership_invites
+  for each row execute procedure public.enforce_invite_partner_availability();
 
 drop trigger if exists workouts_touch_updated_at on public.workouts;
 create trigger workouts_touch_updated_at before update on public.workouts

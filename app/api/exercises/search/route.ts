@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 async function fetchMatchingExercises(query: string) {
   const normalizedQuery = normalizeText(query)
   const collected: NormalizedExercise[] = []
-  let nextUrl = `https://wger.de/api/v2/exerciseinfo/?language=${ENGLISH_LANGUAGE_ID}&limit=${PAGE_LIMIT}`
+  let nextUrl: string | null = `https://wger.de/api/v2/exerciseinfo/?language=${ENGLISH_LANGUAGE_ID}&limit=${PAGE_LIMIT}`
   let page = 0
 
   while (nextUrl && page < MAX_PAGES && collected.length < 12) {
@@ -121,6 +121,7 @@ function normalizeExercise(exercise: WgerExercise): NormalizedExercise | null {
   }
 
   const mainImage = pickExerciseImage(exercise.images)
+  const instructions = translation?.description ? stripHtml(translation.description) : ''
 
   return {
     id: String(exercise.id),
@@ -129,7 +130,7 @@ function normalizeExercise(exercise: WgerExercise): NormalizedExercise | null {
     muscle: pickMuscleName(exercise.muscles, exercise.muscles_secondary) || 'full body',
     equipment: pickEquipmentName(exercise.equipment) || 'bodyweight',
     difficulty: 'intermediate',
-    instructions: stripHtml(translation.description || ''),
+    instructions,
     source: 'wger',
     gifUrl: mainImage || '',
   }
