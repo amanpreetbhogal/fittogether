@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bell, Dumbbell, Flame, Mail, Target, Trophy, UserPlus, Users } from 'lucide-react'
+import { Bell, Dumbbell, Flame, Mail, Target, Trophy, UserPlus, Users, Clock, UtensilsCrossed } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import NudgeButton from '@/components/NudgeButton'
 import { useAuth } from '@/components/auth/AuthProvider'
@@ -25,6 +25,14 @@ type PartnerTooltipProps = {
 
 type InviteCard = PartnershipInviteRow & {
   direction: 'incoming' | 'outgoing'
+}
+
+type PartnerActivityItem = {
+  id: string
+  title: string
+  description: string
+  occurredAt: string
+  badge: string
 }
 
 const CustomTooltip = ({ active, payload, label }: PartnerTooltipProps) => {
@@ -68,7 +76,9 @@ export default function PartnerPage() {
   const partnerInitials = getInitials(partnerProfile?.display_name || partnerProfile?.email || 'FT')
   const partnerWeeklyWorkouts = countWorkoutsThisWeek(partnerWorkouts)
   const yourWeeklyWorkouts = countWorkoutsThisWeek(yourWorkouts)
-  const partnerTodayCalories = partnerFoodEntries.reduce((sum, entry) => sum + entry.calories, 0)
+  const partnerTodayCalories = partnerFoodEntries
+    .filter(entry => entry.entry_date === todayString())
+    .reduce((sum, entry) => sum + entry.calories, 0)
   const partnerLastWorkout = partnerWorkouts[0]?.workout_date || 'No workouts yet'
   const comparisonItems = [
     { label: 'Weekly Workouts', you: yourWeeklyWorkouts, partner: partnerWeeklyWorkouts, unit: '' },
@@ -76,6 +86,17 @@ export default function PartnerPage() {
     { label: 'Shared Goals', you: sharedGoals.filter(goal => goal.owner_user_id === user?.id).length, partner: sharedGoals.filter(goal => goal.owner_user_id === partnerProfile?.id).length, unit: '' },
   ]
   const partnerWorkoutHistory = buildWeeklyWorkoutHistory(partnerWorkouts)
+  const partnerActivity = useMemo(
+    () => buildPartnerActivityFeed({
+      partnerFirstName,
+      partnerWorkouts,
+      partnerFoodEntries,
+      sharedGoals,
+      nudges,
+      userId: user?.id ?? null,
+    }),
+    [nudges, partnerFirstName, partnerFoodEntries, partnerWorkouts, sharedGoals, user?.id]
+  )
   const partnerId = activePartnership && user
     ? activePartnership.user_one_id === user.id
       ? activePartnership.user_two_id
@@ -276,6 +297,8 @@ export default function PartnerPage() {
     }
 
     const nextPartnerId = partnership.user_one_id === user.id ? partnership.user_two_id : partnership.user_one_id
+    const weekStartDate = startOfWeek()
+    const weekStartString = weekStartDate.toISOString().slice(0, 10)
 
     const [
       partnerProfileResult,
@@ -308,8 +331,9 @@ export default function PartnerPage() {
         .from('food_entries')
         .select('*')
         .eq('user_id', nextPartnerId)
-        .eq('entry_date', todayString())
-        .order('created_at', { ascending: false }),
+        .gte('entry_date', weekStartString)
+        .order('created_at', { ascending: false })
+        .limit(30),
       supabase
         .from('nudges')
         .select('*')
@@ -687,6 +711,69 @@ export default function PartnerPage() {
 
             <div style={{ marginTop: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center gap-2 mb-5">
+                <Clock size={18} style={{ color: '#E8002D' }} />
+                <h2 className="text-white font-bold text-lg">Partner Activity</h2>
+              </div>
+
+              {partnerActivity.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>As your partner logs workouts, food, goals, and nudges, their activity will show up here.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {partnerActivity.map(item => (
+                    <div key={item.id} style={{ padding: 16, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="flex items-center gap-8" style={{ marginBottom: 6 }}>
+                            <p className="text-white font-semibold text-sm">{item.title}</p>
+                            <span style={{ color: '#E8002D', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p style={{ color: '#A0A0A0', fontSize: 14, lineHeight: 1.45 }}>{item.description}</p>
+                        </div>
+                        <span style={{ color: '#606060', fontSize: 12, flexShrink: 0 }}>{formatActivityTime(item.occurredAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center gap-2 mb-5">
+                <UtensilsCrossed size={18} style={{ color: '#E8002D' }} />
+                <h2 className="text-white font-bold text-lg">Recent Partner Nutrition</h2>
+              </div>
+
+              {partnerFoodEntries.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>No partner food entries yet this week.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {partnerFoodEntries.slice(0, 5).map(entry => (
+                    <div key={entry.id} style={{ padding: 16, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-white font-semibold text-sm">{entry.food_name}</p>
+                          <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 4 }}>
+                            {capitalizeMeal(entry.meal_type)} · {entry.serving_amount} {entry.serving_unit}
+                          </p>
+                          <p style={{ color: '#606060', fontSize: 12, marginTop: 6 }}>{formatDateTime(entry.created_at)}</p>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ color: '#E8002D', fontWeight: 700, fontSize: 14 }}>{entry.calories} kcal</p>
+                          <p style={{ color: '#A0A0A0', fontSize: 12, marginTop: 4 }}>
+                            P {Number(entry.protein).toFixed(0)} · C {Number(entry.carbs).toFixed(0)} · F {Number(entry.fat).toFixed(0)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center gap-2 mb-5">
                 <Bell size={18} style={{ color: '#E8002D' }} />
                 <h2 className="text-white font-bold text-lg">Recent Nudges</h2>
               </div>
@@ -805,4 +892,91 @@ function getPartnershipErrorMessage(message: string | undefined, fallback: strin
   }
 
   return fallback
+}
+
+function buildPartnerActivityFeed({
+  partnerFirstName,
+  partnerWorkouts,
+  partnerFoodEntries,
+  sharedGoals,
+  nudges,
+  userId,
+}: {
+  partnerFirstName: string
+  partnerWorkouts: WorkoutRow[]
+  partnerFoodEntries: FoodEntryRow[]
+  sharedGoals: GoalRow[]
+  nudges: NudgeRow[]
+  userId: string | null
+}) {
+  const items: PartnerActivityItem[] = []
+
+  partnerWorkouts.slice(0, 4).forEach(workout => {
+    items.push({
+      id: `workout-${workout.id}`,
+      title: `${partnerFirstName} logged a workout`,
+      description: `"${workout.title}" for ${workout.duration_minutes} minutes on ${formatWorkoutDate(workout.workout_date)}.`,
+      occurredAt: `${workout.workout_date}T12:00:00`,
+      badge: 'workout',
+    })
+  })
+
+  partnerFoodEntries.slice(0, 4).forEach(entry => {
+    items.push({
+      id: `food-${entry.id}`,
+      title: `${partnerFirstName} logged food`,
+      description: `${entry.food_name} in ${capitalizeMeal(entry.meal_type)} for ${entry.calories} kcal.`,
+      occurredAt: entry.created_at,
+      badge: 'nutrition',
+    })
+  })
+
+  sharedGoals
+    .filter(goal => goal.owner_user_id !== userId)
+    .slice(0, 3)
+    .forEach(goal => {
+      items.push({
+        id: `goal-${goal.id}`,
+        title: `${partnerFirstName} shared a goal`,
+        description: `"${goal.title}" is at ${goal.current_value}/${goal.target_value} ${goal.unit}.`,
+        occurredAt: goal.updated_at ?? goal.created_at,
+        badge: 'goal',
+      })
+    })
+
+  nudges.slice(0, 4).forEach(nudge => {
+    const sentByPartner = nudge.sender_id !== userId
+    items.push({
+      id: `nudge-${nudge.id}`,
+      title: sentByPartner ? `${partnerFirstName} sent you a nudge` : `You nudged ${partnerFirstName}`,
+      description: nudge.message,
+      occurredAt: nudge.created_at,
+      badge: 'nudge',
+    })
+  })
+
+  return items
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .slice(0, 10)
+}
+
+function formatActivityTime(value: string) {
+  const date = new Date(value)
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function formatWorkoutDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function capitalizeMeal(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }

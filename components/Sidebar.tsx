@@ -1,10 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Dumbbell, UtensilsCrossed, Target, Users, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Dumbbell, UtensilsCrossed, Target, Users, LogOut, Menu, X, Settings } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
+import type { Database } from '@/lib/database.types'
+import { supabase } from '@/lib/supabase'
+
+type ProfileRow = Database['public']['Tables']['profiles']['Row']
+type PartnershipRow = Database['public']['Tables']['partnerships']['Row']
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -12,6 +17,7 @@ const navItems = [
   { href: '/food', label: 'Food Log', icon: UtensilsCrossed },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/partner', label: 'Partner', icon: Users },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function Sidebar() {
@@ -19,6 +25,7 @@ export default function Sidebar() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { profile, user, signOut } = useAuth()
+  const [partnerProfile, setPartnerProfile] = useState<ProfileRow | null>(null)
 
   const metadataDisplayName = typeof user?.user_metadata?.display_name === 'string'
     ? user.user_metadata.display_name
@@ -30,6 +37,56 @@ export default function Sidebar() {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('') || 'FT'
+  const partnerDisplayName = partnerProfile?.display_name ?? 'No partner connected'
+  const partnerInitials = partnerProfile
+    ? partnerDisplayName
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? '')
+        .join('') || 'FT'
+    : 'FT'
+
+  useEffect(() => {
+    const loadPartner = async () => {
+      if (!user) {
+        setPartnerProfile(null)
+        return
+      }
+
+      const { data: partnerships, error: partnershipError } = await supabase
+        .from('partnerships')
+        .select('*')
+        .eq('status', 'active')
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .limit(1)
+
+      if (partnershipError || !partnerships?.length) {
+        setPartnerProfile(null)
+        return
+      }
+
+      const partnership = partnerships[0] as PartnershipRow
+      const partnerId = partnership.user_one_id === user.id
+        ? partnership.user_two_id
+        : partnership.user_one_id
+
+      const { data: nextPartnerProfile, error: partnerError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', partnerId)
+        .maybeSingle()
+
+      if (partnerError) {
+        setPartnerProfile(null)
+        return
+      }
+
+      setPartnerProfile(nextPartnerProfile)
+    }
+
+    void loadPartner()
+  }, [user])
 
   const handleSignOut = async () => {
     await signOut()
@@ -51,19 +108,38 @@ export default function Sidebar() {
 
       {/* Partner pill */}
       <div style={{ margin: '0 16px 24px', padding: 12, borderRadius: 10, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-        <p style={{ color: '#A0A0A0', fontSize: 11, marginBottom: 8 }}>Connected with</p>
+        <p style={{ color: '#A0A0A0', fontSize: 11, marginBottom: 8 }}>
+          {partnerProfile ? 'Connected with' : 'Partner status'}
+        </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-            PK
+            {partnerInitials}
           </div>
           <div>
-            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>Priyana Kumar</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4ade80' }} />
-              <span style={{ color: '#A0A0A0', fontSize: 11 }}>Active today</span>
-            </div>
+            <p style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{partnerDisplayName}</p>
+            <span style={{ color: '#A0A0A0', fontSize: 11 }}>
+              {partnerProfile ? 'Partnership active' : 'Invite or connect on the Partner page'}
+            </span>
           </div>
         </div>
+        {!partnerProfile && (
+          <Link
+            href="/partner"
+            onClick={() => setMobileOpen(false)}
+            style={{
+              marginTop: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              textDecoration: 'none',
+              color: '#E8002D',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Open partner setup
+          </Link>
+        )}
       </div>
 
       {/* Nav */}

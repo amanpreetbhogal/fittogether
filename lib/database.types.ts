@@ -7,6 +7,8 @@ export type Database = {
           email: string
           display_name: string
           avatar_url: string | null
+          preferred_weight_unit: string
+          daily_calorie_goal: number
           created_at: string
           updated_at: string
         }
@@ -15,6 +17,8 @@ export type Database = {
           email: string
           display_name: string
           avatar_url?: string | null
+          preferred_weight_unit?: string
+          daily_calorie_goal?: number
           created_at?: string
           updated_at?: string
         }
@@ -23,6 +27,8 @@ export type Database = {
           email?: string
           display_name?: string
           avatar_url?: string | null
+          preferred_weight_unit?: string
+          daily_calorie_goal?: number
           created_at?: string
           updated_at?: string
         }

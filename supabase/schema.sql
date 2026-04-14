@@ -20,9 +20,17 @@ create table if not exists public.profiles (
   email text not null unique,
   display_name text not null,
   avatar_url text,
+  preferred_weight_unit text not null default 'lbs',
+  daily_calorie_goal integer not null default 2000 check (daily_calorie_goal > 0),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.profiles
+  add column if not exists preferred_weight_unit text not null default 'lbs';
+
+alter table public.profiles
+  add column if not exists daily_calorie_goal integer not null default 2000;
 
 create table if not exists public.partnerships (
   id uuid primary key default gen_random_uuid(),

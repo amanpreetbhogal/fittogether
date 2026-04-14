@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Flame, X } from 'lucide-react'
+import { Search, Flame, Star, X } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -31,6 +31,22 @@ interface LoggedFood {
   carbs: number
   fat: number
   meal: string
+  servingAmount: number
+  servingUnit: string
+}
+
+interface FoodShortcut {
+  key: string
+  name: string
+  brand?: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  servingAmount: number
+  servingUnit: string
+  useCount: number
+  lastLoggedAt: string
 }
 
 type FoodEntryRow = Database['public']['Tables']['food_entries']['Row']
@@ -49,9 +65,10 @@ const DB_TO_MEAL_TYPE: Record<MealType, typeof MEAL_TYPES[number]> = {
   dinner: 'Dinner',
   snack: 'Snack',
 }
+const FAVORITE_FOODS_KEY = 'fittogether.favoriteFoods'
 
 export default function FoodPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -63,6 +80,16 @@ export default function FoodPage() {
   const [loadingFoods, setLoadingFoods] = useState(true)
   const [savingFood, setSavingFood] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [editingFoodId, setEditingFoodId] = useState<string | null>(null)
+  const [editServingAmount, setEditServingAmount] = useState('1')
+  const [editMeal, setEditMeal] = useState<typeof MEAL_TYPES[number]>('Breakfast')
+  const [updatingFood, setUpdatingFood] = useState(false)
+  const [recentShortcuts, setRecentShortcuts] = useState<FoodShortcut[]>([])
+  const [frequentShortcuts, setFrequentShortcuts] = useState<FoodShortcut[]>([])
+  const [quickAddingKey, setQuickAddingKey] = useState<string | null>(null)
+  const [favoriteShortcuts, setFavoriteShortcuts] = useState<FoodShortcut[]>(() => loadFavoriteShortcuts())
+  const today = new Date().toISOString().slice(0, 10)
+  const dailyCalorieGoal = profile?.daily_calorie_goal ?? 2000
 
   useEffect(() => {
     const loadFoods = async () => {
@@ -77,24 +104,38 @@ export default function FoodPage() {
       const { data, error } = await supabase
         .from('food_entries')
         .select('*')
+        .eq('user_id', user.id)
+        .eq('entry_date', today)
         .order('created_at', { ascending: false })
 
-      if (error) {
-        console.error('Failed to load food entries', error)
+      const { data: historyData, error: historyError } = await supabase
+        .from('food_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(80)
+
+      if (error || historyError) {
+        console.error('Failed to load food entries', error || historyError)
         setErrorMessage('Could not load your food log right now.')
         setLoggedFoods([])
+        setRecentShortcuts([])
+        setFrequentShortcuts([])
         setLoadingFoods(false)
         return
       }
 
       setLoggedFoods(data.map(mapFoodEntryToLoggedFood))
+      const shortcuts = buildFoodShortcuts(historyData || [])
+      setRecentShortcuts(shortcuts.recent)
+      setFrequentShortcuts(shortcuts.frequent)
       setLoadingFoods(false)
     }
 
     if (!authLoading) {
       void loadFoods()
     }
-  }, [authLoading, user])
+  }, [authLoading, today, user])
 
   const searchFood = async () => {
     if (!query.trim()) return
@@ -172,6 +213,57 @@ export default function FoodPage() {
     setSavingFood(false)
   }
 
+  const quickAddShortcut = async (shortcut: FoodShortcut) => {
+    if (!user) {
+      return
+    }
+
+    setQuickAddingKey(shortcut.key)
+    setErrorMessage(null)
+
+    const { data, error } = await supabase
+      .from('food_entries')
+      .insert({
+        user_id: user.id,
+        meal_type: MEAL_TYPE_TO_DB[selectedMeal as keyof typeof MEAL_TYPE_TO_DB],
+        food_name: shortcut.name,
+        brand: shortcut.brand ?? null,
+        source: 'history',
+        serving_amount: Number(shortcut.servingAmount.toFixed(2)),
+        serving_unit: shortcut.servingUnit,
+        calories: shortcut.calories,
+        protein: Number(shortcut.protein.toFixed(1)),
+        carbs: Number(shortcut.carbs.toFixed(1)),
+        fat: Number(shortcut.fat.toFixed(1)),
+      })
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Failed to quick add food entry', error)
+      setErrorMessage('Could not quick add this food right now.')
+      setQuickAddingKey(null)
+      return
+    }
+
+    setLoggedFoods(prev => [mapFoodEntryToLoggedFood(data), ...prev])
+    setQuickAddingKey(null)
+  }
+
+  const toggleFavoriteShortcut = (shortcut: FoodShortcut) => {
+    setFavoriteShortcuts(prev => {
+      const exists = prev.some(item => item.key === shortcut.key)
+      const next = exists
+        ? prev.filter(item => item.key !== shortcut.key)
+        : [shortcut, ...prev].slice(0, 12)
+
+      persistFavoriteShortcuts(next)
+      return next
+    })
+  }
+
+  const isFavoriteShortcut = (shortcutKey: string) => favoriteShortcuts.some(item => item.key === shortcutKey)
+
   const removeFood = async (id: string) => {
     setErrorMessage(null)
 
@@ -187,6 +279,57 @@ export default function FoodPage() {
     }
 
     setLoggedFoods(prev => prev.filter(f => f.id !== id))
+  }
+
+  const startEditingFood = (food: LoggedFood) => {
+    setEditingFoodId(food.id)
+    setEditServingAmount(String(food.servingAmount))
+    setEditMeal(food.meal as typeof MEAL_TYPES[number])
+    setErrorMessage(null)
+  }
+
+  const cancelEditingFood = () => {
+    setEditingFoodId(null)
+    setEditServingAmount('1')
+    setEditMeal('Breakfast')
+  }
+
+  const saveFoodEdit = async (food: LoggedFood) => {
+    const nextServingAmount = Number.parseFloat(editServingAmount)
+
+    if (!Number.isFinite(nextServingAmount) || nextServingAmount <= 0) {
+      setErrorMessage('Enter a valid serving amount greater than 0.')
+      return
+    }
+
+    const scale = nextServingAmount / Math.max(food.servingAmount, 0.01)
+    setUpdatingFood(true)
+    setErrorMessage(null)
+
+    const { data, error } = await supabase
+      .from('food_entries')
+      .update({
+        meal_type: MEAL_TYPE_TO_DB[editMeal],
+        serving_amount: Number(nextServingAmount.toFixed(2)),
+        calories: Math.round(food.calories * scale),
+        protein: Number((food.protein * scale).toFixed(1)),
+        carbs: Number((food.carbs * scale).toFixed(1)),
+        fat: Number((food.fat * scale).toFixed(1)),
+      })
+      .eq('id', food.id)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Failed to update food entry', error)
+      setErrorMessage('Could not update this food entry. Please try again.')
+      setUpdatingFood(false)
+      return
+    }
+
+    setLoggedFoods(prev => prev.map(entry => entry.id === food.id ? mapFoodEntryToLoggedFood(data) : entry))
+    setUpdatingFood(false)
+    cancelEditingFood()
   }
 
   const totals = loggedFoods.reduce((acc, f) => ({
@@ -249,7 +392,7 @@ export default function FoodPage() {
           <h2 style={{ color: '#fff', fontWeight: 700, marginBottom: 20 }}>Today&apos;s Summary</h2>
           {/* Calories - centered on top */}
           {(() => {
-            const pct = Math.min(100, Math.round((totals.calories / 2000) * 100))
+            const pct = Math.min(100, Math.round((totals.calories / Math.max(dailyCalorieGoal, 1)) * 100))
             return (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
                 <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 12 }}>
@@ -264,7 +407,7 @@ export default function FoodPage() {
                 </div>
                 <p style={{ color: '#fff', fontWeight: 900, fontSize: 28 }}>{totals.calories}</p>
                 <p style={{ color: '#A0A0A0', fontSize: 13 }}>Calories (kcal)</p>
-                <p style={{ color: '#E8002D', fontSize: 12, marginTop: 4 }}>of 2000 kcal</p>
+                <p style={{ color: '#E8002D', fontSize: 12, marginTop: 4 }}>of {dailyCalorieGoal} kcal</p>
               </div>
             )
           })()}
@@ -357,6 +500,177 @@ export default function FoodPage() {
                 </button>
               </div>
 
+              {favoriteShortcuts.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Pinned Favorites</p>
+                    <span style={{ color: '#606060', fontSize: 11 }}>One-tap foods you reuse often</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {favoriteShortcuts.map(shortcut => (
+                      <div
+                        key={`favorite-${shortcut.key}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          backgroundColor: '#252525',
+                          border: '0.5px solid rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <button
+                          onClick={() => void quickAddShortcut(shortcut)}
+                          disabled={quickAddingKey === shortcut.key}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
+                            fontFamily: 'inherit',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            textAlign: 'left',
+                            padding: 0,
+                          }}
+                        >
+                          {shortcut.name}
+                        </button>
+                        <button
+                          onClick={() => toggleFavoriteShortcut(shortcut)}
+                          style={{ background: 'none', border: 'none', color: '#E8002D', cursor: 'pointer', padding: 0 }}
+                          aria-label={`Remove ${shortcut.name} from favorites`}
+                        >
+                          <Star size={14} fill="currentColor" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(recentShortcuts.length > 0 || frequentShortcuts.length > 0) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+                  {recentShortcuts.length > 0 && (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Recent Foods</p>
+                        <span style={{ color: '#606060', fontSize: 11 }}>Quick add to {selectedMeal}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {recentShortcuts.map(shortcut => (
+                          <div
+                            key={`recent-${shortcut.key}`}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 8,
+                              backgroundColor: '#252525',
+                              border: '0.5px solid rgba(255,255,255,0.08)',
+                              borderRadius: 10,
+                              padding: '10px 12px',
+                              minWidth: 150,
+                            }}
+                          >
+                            <button
+                              onClick={() => void quickAddShortcut(shortcut)}
+                              disabled={quickAddingKey === shortcut.key}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: 2,
+                                background: 'none',
+                                border: 'none',
+                                cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
+                                fontFamily: 'inherit',
+                                opacity: quickAddingKey === shortcut.key ? 0.7 : 1,
+                                padding: 0,
+                                flex: 1,
+                              }}
+                            >
+                              <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>{shortcut.name}</span>
+                              <span style={{ color: '#A0A0A0', fontSize: 11, textAlign: 'left' }}>
+                                {shortcut.calories} kcal · {shortcut.servingAmount} {shortcut.servingUnit}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => toggleFavoriteShortcut(shortcut)}
+                              style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
+                              aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}
+                            >
+                              <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {frequentShortcuts.length > 0 && (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Most Logged</p>
+                        <span style={{ color: '#606060', fontSize: 11 }}>Your go-to foods</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {frequentShortcuts.map(shortcut => (
+                          <div
+                            key={`frequent-${shortcut.key}`}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 10,
+                              padding: '10px 12px',
+                              backgroundColor: '#252525',
+                              borderRadius: 10,
+                              border: '0.5px solid rgba(255,255,255,0.08)',
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {shortcut.name}
+                              </p>
+                              <p style={{ color: '#A0A0A0', fontSize: 11 }}>
+                                Logged {shortcut.useCount} times · {shortcut.calories} kcal
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => void quickAddShortcut(shortcut)}
+                              disabled={quickAddingKey === shortcut.key}
+                              style={{
+                                backgroundColor: 'rgba(232,0,45,0.12)',
+                                color: '#E8002D',
+                                border: '0.5px solid rgba(232,0,45,0.4)',
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                fontWeight: 600,
+                                fontSize: 12,
+                                cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
+                                fontFamily: 'inherit',
+                                whiteSpace: 'nowrap',
+                                opacity: quickAddingKey === shortcut.key ? 0.7 : 1,
+                              }}
+                            >
+                              {quickAddingKey === shortcut.key ? 'Adding...' : '+ Quick Add'}
+                            </button>
+                            <button
+                              onClick={() => toggleFavoriteShortcut(shortcut)}
+                              style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
+                              aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}
+                            >
+                              <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Add serving size input when a food is selected */}
               {addingFood && (
                 <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: '#252525', border: '1px solid #E8002D' }}>
@@ -406,6 +720,10 @@ export default function FoodPage() {
               {results.length > 0 && (
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {results.map((food, i) => (
+                    (() => {
+                      const shortcut = foodResultToShortcut(food)
+                      const favorite = isFavoriteShortcut(shortcut.key)
+                      return (
                     <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: '#252525' }}>
                       <div className="min-w-0 flex-1 mr-3">
                         <p className="text-white text-sm font-semibold truncate">{food.name}</p>
@@ -414,16 +732,27 @@ export default function FoodPage() {
                           {Math.round(food.calories)} kcal · {food.servingDescription}
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setServingSize('1')
-                          setAddingFood(food)
-                        }}
-                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                      >
-                        + Add
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button
+                          onClick={() => toggleFavoriteShortcut(shortcut)}
+                          style={{ background: 'none', border: 'none', color: favorite ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
+                          aria-label={`${favorite ? 'Remove' : 'Add'} ${food.name} favorite`}
+                        >
+                          <Star size={14} fill={favorite ? 'currentColor' : 'none'} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setServingSize('1')
+                            setAddingFood(food)
+                          }}
+                          style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                        >
+                          + Add
+                        </button>
+                      </div>
                     </div>
+                      )
+                    })()
                   ))}
                 </div>
               )}
@@ -465,20 +794,89 @@ export default function FoodPage() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {foods.map(f => (
+                        (() => {
+                          const shortcut = loggedFoodToShortcut(f)
+                          const favorite = isFavoriteShortcut(shortcut.key)
+                          return (
                         <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 10, backgroundColor: '#252525' }}>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <p style={{ color: '#fff', fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</p>
-                            <p style={{ fontSize: 12, color: '#A0A0A0', marginTop: 2 }}>
-                              P: {f.protein}g · C: {f.carbs}g · F: {f.fat}g
-                            </p>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 12 }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: '#E8002D' }}>{f.calories}</span>
-                            <button onClick={() => void removeFood(f.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <X size={14} />
-                            </button>
-                          </div>
+                          {editingFoodId === f.id ? (
+                            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              <div>
+                                <p style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{f.name}</p>
+                                <p style={{ fontSize: 12, color: '#A0A0A0', marginTop: 2 }}>
+                                  Update servings or move this item to a different meal.
+                                </p>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                <input
+                                  type="number"
+                                  min="0.25"
+                                  step="0.25"
+                                  value={editServingAmount}
+                                  onChange={event => setEditServingAmount(event.target.value)}
+                                  style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, padding: '10px 12px', outline: 'none', fontSize: 13 }}
+                                />
+                                <select
+                                  value={editMeal}
+                                  onChange={event => setEditMeal(event.target.value as typeof MEAL_TYPES[number])}
+                                  style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, padding: '10px 12px', outline: 'none', fontSize: 13, fontFamily: 'inherit' }}
+                                >
+                                  {MEAL_TYPES.map(mealOption => (
+                                    <option key={mealOption} value={mealOption}>{mealOption}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <p style={{ fontSize: 12, color: '#A0A0A0' }}>
+                                Current serving: {f.servingAmount} {f.servingUnit}
+                              </p>
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={() => void saveFoodEdit(f)}
+                                  disabled={updatingFood}
+                                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, cursor: updatingFood ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: updatingFood ? 0.7 : 1 }}
+                                >
+                                  {updatingFood ? 'Saving...' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={cancelEditingFood}
+                                  style={{ backgroundColor: 'transparent', color: '#A0A0A0', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <p style={{ color: '#fff', fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</p>
+                                <p style={{ fontSize: 12, color: '#A0A0A0', marginTop: 2 }}>
+                                  {f.servingAmount} {f.servingUnit} · P: {f.protein}g · C: {f.carbs}g · F: {f.fat}g
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 12 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#E8002D' }}>{f.calories}</span>
+                                <button
+                                  onClick={() => startEditingFood(f)}
+                                  style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => toggleFavoriteShortcut(shortcut)}
+                                  style={{ background: 'none', border: 'none', color: favorite ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
+                                  aria-label={`${favorite ? 'Remove' : 'Add'} ${f.name} favorite`}
+                                >
+                                  <Star size={14} fill={favorite ? 'currentColor' : 'none'} />
+                                </button>
+                                <button onClick={() => void removeFood(f.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
+                          )
+                        })()
                       ))}
                     </div>
                   )}
@@ -502,5 +900,121 @@ function mapFoodEntryToLoggedFood(entry: FoodEntryRow): LoggedFood {
     carbs: Number(entry.carbs),
     fat: Number(entry.fat),
     meal: DB_TO_MEAL_TYPE[entry.meal_type],
+    servingAmount: Number(entry.serving_amount),
+    servingUnit: entry.serving_unit,
   }
+}
+
+function buildShortcutKey(name: string, brand: string | undefined, servingUnit: string) {
+  return `${name.trim().toLowerCase()}::${(brand ?? '').trim().toLowerCase()}::${servingUnit.trim().toLowerCase()}`
+}
+
+function foodResultToShortcut(food: FoodResult): FoodShortcut {
+  return {
+    key: buildShortcutKey(food.name, food.brand, food.servingUnit),
+    name: food.name,
+    brand: food.brand,
+    calories: Math.round(food.calories),
+    protein: Number(food.protein),
+    carbs: Number(food.carbs),
+    fat: Number(food.fat),
+    servingAmount: Number(food.servingAmount),
+    servingUnit: food.servingUnit,
+    useCount: 1,
+    lastLoggedAt: new Date().toISOString(),
+  }
+}
+
+function loggedFoodToShortcut(food: LoggedFood): FoodShortcut {
+  return {
+    key: buildShortcutKey(food.name, food.brand, food.servingUnit),
+    name: food.name,
+    brand: food.brand,
+    calories: food.calories,
+    protein: food.protein,
+    carbs: food.carbs,
+    fat: food.fat,
+    servingAmount: food.servingAmount,
+    servingUnit: food.servingUnit,
+    useCount: 1,
+    lastLoggedAt: new Date().toISOString(),
+  }
+}
+
+function buildFoodShortcuts(entries: FoodEntryRow[]) {
+  const shortcutMap = new Map<string, FoodShortcut>()
+
+  for (const entry of entries) {
+    const key = `${entry.food_name.trim().toLowerCase()}::${(entry.brand ?? '').trim().toLowerCase()}::${entry.serving_unit.trim().toLowerCase()}`
+    const existing = shortcutMap.get(key)
+
+    if (!existing) {
+      shortcutMap.set(key, {
+        key,
+        name: entry.food_name,
+        brand: entry.brand ?? undefined,
+        calories: entry.calories,
+        protein: Number(entry.protein),
+        carbs: Number(entry.carbs),
+        fat: Number(entry.fat),
+        servingAmount: Number(entry.serving_amount),
+        servingUnit: entry.serving_unit,
+        useCount: 1,
+        lastLoggedAt: entry.created_at,
+      })
+      continue
+    }
+
+    existing.useCount += 1
+    if (new Date(entry.created_at) > new Date(existing.lastLoggedAt)) {
+      existing.lastLoggedAt = entry.created_at
+      existing.calories = entry.calories
+      existing.protein = Number(entry.protein)
+      existing.carbs = Number(entry.carbs)
+      existing.fat = Number(entry.fat)
+      existing.servingAmount = Number(entry.serving_amount)
+      existing.servingUnit = entry.serving_unit
+    }
+  }
+
+  const shortcuts = Array.from(shortcutMap.values())
+  const recent = [...shortcuts]
+    .sort((a, b) => new Date(b.lastLoggedAt).getTime() - new Date(a.lastLoggedAt).getTime())
+    .slice(0, 6)
+  const frequent = [...shortcuts]
+    .sort((a, b) => {
+      if (b.useCount !== a.useCount) {
+        return b.useCount - a.useCount
+      }
+      return new Date(b.lastLoggedAt).getTime() - new Date(a.lastLoggedAt).getTime()
+    })
+    .slice(0, 5)
+
+  return { recent, frequent }
+}
+
+function loadFavoriteShortcuts(): FoodShortcut[] {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const raw = window.localStorage.getItem(FAVORITE_FOODS_KEY)
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw) as FoodShortcut[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistFavoriteShortcuts(shortcuts: FoodShortcut[]) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(shortcuts))
 }

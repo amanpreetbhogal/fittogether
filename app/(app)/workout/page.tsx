@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
@@ -56,6 +56,25 @@ interface RecentWorkout {
   }[]
 }
 
+interface WorkoutTemplate {
+  id: string
+  name: string
+  createdAt: string
+  exercises: {
+    name: string
+    muscle: string
+    equipment: string
+    difficulty: string
+    instructions: string
+    gifUrl: string
+    sets: {
+      reps: string
+      weight: string
+      unit: 'lbs' | 'kg'
+    }[]
+  }[]
+}
+
 type WorkoutRow = Database['public']['Tables']['workouts']['Row']
 type WorkoutExerciseRow = Database['public']['Tables']['workout_exercises']['Row']
 type ExerciseSetRow = Database['public']['Tables']['exercise_sets']['Row']
@@ -72,9 +91,10 @@ const difficultyColor: Record<string, string> = {
   intermediate: '#f59e0b',
   expert: '#E8002D',
 }
+const WORKOUT_TEMPLATES_KEY = 'fittogether.workoutTemplates'
 
 export default function WorkoutPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchedExercise[]>([])
   const [searching, setSearching] = useState(false)
@@ -92,88 +112,93 @@ export default function WorkoutPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0)
   const [restActive, setRestActive] = useState(false)
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null)
+  const [previousPerformanceLookup, setPreviousPerformanceLookup] = useState<PreviousSetLookup>({})
+  const [templates, setTemplates] = useState<WorkoutTemplate[]>(() => loadWorkoutTemplates())
+  const defaultWeightUnit: 'lbs' | 'kg' = profile?.preferred_weight_unit === 'kg' ? 'kg' : 'lbs'
 
-  useEffect(() => {
-    const loadRecentWorkouts = async () => {
-      if (!user) {
-        setRecentWorkouts([])
-        setLoadingRecentWorkouts(false)
-        return
-      }
-
-      setLoadingRecentWorkouts(true)
-      setWorkoutError(null)
-
-      const { data: workouts, error: workoutsError } = await supabase
-        .from('workouts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('workout_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (workoutsError) {
-        console.error('Failed to load workouts', workoutsError)
-        setWorkoutError('Could not load your recent workouts right now.')
-        setRecentWorkouts([])
-        setLoadingRecentWorkouts(false)
-        return
-      }
-
-      if (!workouts || workouts.length === 0) {
-        setRecentWorkouts([])
-        setLoadingRecentWorkouts(false)
-        return
-      }
-
-      const workoutIds = workouts.map(workout => workout.id)
-      const { data: workoutExercises, error: exercisesError } = await supabase
-        .from('workout_exercises')
-        .select('*')
-        .in('workout_id', workoutIds)
-        .order('exercise_order', { ascending: true })
-
-      if (exercisesError) {
-        console.error('Failed to load workout exercises', exercisesError)
-        setWorkoutError('Could not load your recent workouts right now.')
-        setRecentWorkouts([])
-        setLoadingRecentWorkouts(false)
-        return
-      }
-
-      const exerciseIds = (workoutExercises || []).map(exercise => exercise.id)
-      const { data: exerciseSets, error: setsError } = exerciseIds.length
-        ? await supabase
-            .from('exercise_sets')
-            .select('*')
-            .in('workout_exercise_id', exerciseIds)
-            .order('set_order', { ascending: true })
-        : { data: [] as ExerciseSetRow[], error: null }
-
-      if (setsError) {
-        console.error('Failed to load exercise sets', setsError)
-        setWorkoutError('Could not load your recent workouts right now.')
-        setRecentWorkouts([])
-        setLoadingRecentWorkouts(false)
-        return
-      }
-
-      const previousSetLookup = buildPreviousSetLookup(workouts, workoutExercises || [], exerciseSets || [])
-
-      setRecentWorkouts(mapRecentWorkouts(workouts, workoutExercises || [], exerciseSets || []))
-      setActiveExercises(prev =>
-        prev.map(exercise => ({
-          ...exercise,
-          previousPerformance: previousSetLookup[normalizeExerciseKey(exercise.name)] || null,
-        }))
-      )
+  const loadRecentWorkouts = useCallback(async () => {
+    if (!user) {
+      setRecentWorkouts([])
       setLoadingRecentWorkouts(false)
+      return
     }
 
+    setLoadingRecentWorkouts(true)
+    setWorkoutError(null)
+
+    const { data: workouts, error: workoutsError } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('workout_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (workoutsError) {
+      console.error('Failed to load workouts', workoutsError)
+      setWorkoutError('Could not load your recent workouts right now.')
+      setRecentWorkouts([])
+      setLoadingRecentWorkouts(false)
+      return
+    }
+
+    if (!workouts || workouts.length === 0) {
+      setRecentWorkouts([])
+      setLoadingRecentWorkouts(false)
+      return
+    }
+
+    const workoutIds = workouts.map(workout => workout.id)
+    const { data: workoutExercises, error: exercisesError } = await supabase
+      .from('workout_exercises')
+      .select('*')
+      .in('workout_id', workoutIds)
+      .order('exercise_order', { ascending: true })
+
+    if (exercisesError) {
+      console.error('Failed to load workout exercises', exercisesError)
+      setWorkoutError('Could not load your recent workouts right now.')
+      setRecentWorkouts([])
+      setLoadingRecentWorkouts(false)
+      return
+    }
+
+    const exerciseIds = (workoutExercises || []).map(exercise => exercise.id)
+    const { data: exerciseSets, error: setsError } = exerciseIds.length
+      ? await supabase
+          .from('exercise_sets')
+          .select('*')
+          .in('workout_exercise_id', exerciseIds)
+          .order('set_order', { ascending: true })
+      : { data: [] as ExerciseSetRow[], error: null }
+
+    if (setsError) {
+      console.error('Failed to load exercise sets', setsError)
+      setWorkoutError('Could not load your recent workouts right now.')
+      setRecentWorkouts([])
+      setLoadingRecentWorkouts(false)
+      return
+    }
+
+    const previousSetLookup = buildPreviousSetLookup(workouts, workoutExercises || [], exerciseSets || [])
+
+    setPreviousPerformanceLookup(previousSetLookup)
+    setRecentWorkouts(mapRecentWorkouts(workouts, workoutExercises || [], exerciseSets || []))
+    setActiveExercises(prev =>
+      prev.map(exercise => ({
+        ...exercise,
+        previousPerformance: previousSetLookup[normalizeExerciseKey(exercise.name)] || null,
+      }))
+    )
+    setLoadingRecentWorkouts(false)
+  }, [user])
+
+  useEffect(() => {
     if (!authLoading) {
       void loadRecentWorkouts()
     }
-  }, [authLoading, user])
+  }, [authLoading, loadRecentWorkouts])
 
   useEffect(() => {
     if (!workoutActive || startedAt === null) {
@@ -255,8 +280,8 @@ export default function WorkoutPage() {
         difficulty: exercise.difficulty,
         instructions: exercise.instructions,
         gifUrl: exercise.gifUrl,
-        sets: [{ reps: '', weight: '', unit: 'lbs', completed: false }],
-        previousPerformance: null,
+        sets: [{ reps: '', weight: '', unit: defaultWeightUnit, completed: false }],
+        previousPerformance: previousPerformanceLookup[normalizeExerciseKey(exercise.name)] || null,
       },
     ])
     setSearchResults([])
@@ -283,7 +308,7 @@ export default function WorkoutPage() {
                 {
                   reps: '',
                   weight: '',
-                  unit: exercise.sets[exercise.sets.length - 1]?.unit ?? 'lbs',
+                  unit: exercise.sets[exercise.sets.length - 1]?.unit ?? defaultWeightUnit,
                   completed: false,
                 },
               ],
@@ -324,7 +349,7 @@ export default function WorkoutPage() {
 
         return {
           ...exercise,
-          sets: nextSets.length > 0 ? nextSets : [{ reps: '', weight: '', unit: 'lbs', completed: false }],
+          sets: nextSets.length > 0 ? nextSets : [{ reps: '', weight: '', unit: defaultWeightUnit, completed: false }],
         }
       })
     )
@@ -532,17 +557,183 @@ export default function WorkoutPage() {
     setSavingWorkout(false)
   }
 
+  const repeatRecentWorkout = (workout: RecentWorkout) => {
+    if (activeExercises.length > 0) {
+      const confirmed = window.confirm('Replace your current active workout with this previous workout?')
+
+      if (!confirmed) {
+        return
+      }
+    }
+
+    const repeatedExercises = workout.exercises.map(exercise => {
+      const normalizedName = normalizeExerciseKey(exercise.name)
+
+      return {
+        id: crypto.randomUUID(),
+        name: exercise.name,
+        muscle: exercise.muscle,
+        equipment: '',
+        difficulty: 'intermediate',
+        instructions: '',
+        gifUrl: '',
+        sets: exercise.sets.length > 0
+          ? exercise.sets.map(set => ({
+              reps: set.reps !== null ? String(set.reps) : '',
+              weight: set.weight !== null ? String(set.weight) : '',
+              unit: set.unit === 'kg' ? 'kg' : 'lbs',
+              completed: false,
+            }))
+          : [{ reps: '', weight: '', unit: defaultWeightUnit, completed: false }],
+        previousPerformance: previousPerformanceLookup[normalizedName] || null,
+      } satisfies ActiveExercise
+    })
+
+    setWorkoutName(workout.name)
+    setActiveExercises(repeatedExercises)
+    setWorkoutActive(true)
+    setStartedAt(Date.now())
+    setElapsedSeconds(0)
+    stopRestTimer()
+    setExpandedExercise(repeatedExercises[0]?.id ?? null)
+    setWorkoutError(null)
+  }
+
+  const saveCurrentWorkoutAsTemplate = () => {
+    if (activeExercises.length === 0) {
+      setWorkoutError('Add at least one exercise before saving a template.')
+      return
+    }
+
+    const suggestedName = workoutName.trim() || 'My Template'
+    const templateName = window.prompt('Template name', suggestedName)?.trim()
+
+    if (!templateName) {
+      return
+    }
+
+    const nextTemplate: WorkoutTemplate = {
+      id: crypto.randomUUID(),
+      name: templateName,
+      createdAt: new Date().toISOString(),
+      exercises: activeExercises.map(exercise => ({
+        name: exercise.name,
+        muscle: exercise.muscle,
+        equipment: exercise.equipment,
+        difficulty: exercise.difficulty,
+        instructions: exercise.instructions,
+        gifUrl: exercise.gifUrl,
+        sets: exercise.sets.map(set => ({
+          reps: set.reps,
+          weight: set.weight,
+          unit: set.unit,
+        })),
+      })),
+    }
+
+    setTemplates(prev => {
+      const next = [nextTemplate, ...prev.filter(template => template.name !== templateName)].slice(0, 12)
+      persistWorkoutTemplates(next)
+      return next
+    })
+    setWorkoutError(null)
+  }
+
+  const applyTemplate = (template: WorkoutTemplate) => {
+    if (activeExercises.length > 0) {
+      const confirmed = window.confirm('Replace your current active workout with this template?')
+
+      if (!confirmed) {
+        return
+      }
+    }
+
+    const templatedExercises = template.exercises.map(exercise => ({
+      id: crypto.randomUUID(),
+      name: exercise.name,
+      muscle: exercise.muscle,
+      equipment: exercise.equipment,
+      difficulty: exercise.difficulty,
+      instructions: exercise.instructions,
+      gifUrl: exercise.gifUrl,
+      sets: exercise.sets.length > 0
+        ? exercise.sets.map(set => ({
+            reps: set.reps,
+            weight: set.weight,
+            unit: set.unit,
+            completed: false,
+          }))
+        : [{ reps: '', weight: '', unit: defaultWeightUnit, completed: false }],
+      previousPerformance: previousPerformanceLookup[normalizeExerciseKey(exercise.name)] || null,
+    }))
+
+    setWorkoutName(template.name)
+    setActiveExercises(templatedExercises)
+    setWorkoutActive(true)
+    setStartedAt(Date.now())
+    setElapsedSeconds(0)
+    stopRestTimer()
+    setExpandedExercise(templatedExercises[0]?.id ?? null)
+    setWorkoutError(null)
+  }
+
+  const deleteTemplate = (templateId: string) => {
+    setTemplates(prev => {
+      const next = prev.filter(template => template.id !== templateId)
+      persistWorkoutTemplates(next)
+      return next
+    })
+  }
+
+  const deleteRecentWorkout = async (workoutId: string, workoutTitle: string) => {
+    const confirmed = window.confirm(`Delete "${workoutTitle}" from your workout history?`)
+
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingWorkoutId(workoutId)
+    setWorkoutError(null)
+
+    const { error } = await supabase
+      .from('workouts')
+      .delete()
+      .eq('id', workoutId)
+
+    if (error) {
+      console.error('Failed to delete workout', error)
+      setWorkoutError('Could not delete that workout right now.')
+      setDeletingWorkoutId(null)
+      return
+    }
+
+    setRecentWorkouts(prev => prev.filter(workout => workout.id !== workoutId))
+    if (expandedRecentWorkout === workoutId) {
+      setExpandedRecentWorkout(null)
+    }
+    setDeletingWorkoutId(null)
+    await loadRecentWorkouts()
+  }
+
   const timerLabel = formatElapsedTime(elapsedSeconds)
   const restTimerLabel = formatElapsedTime(restSecondsRemaining)
+  const totalSetCount = activeExercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)
+  const completedSetCount = activeExercises.reduce((sum, exercise) => sum + exercise.sets.filter(set => set.completed).length, 0)
 
   return (
     <>
       <style>{`
         .workout-wrapper { padding: 32px; max-width: 1152px; margin: 0 auto; }
         .workout-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
-        .workout-grid { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 32px; }
+        .workout-grid { display: grid; grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr); gap: 28px; align-items: start; }
+        .workout-primary { order: 2; }
+        .workout-secondary { order: 1; }
         .workout-section { margin-bottom: 24px; }
         .session-shell { position: sticky; top: 32px; border-radius: 18px; padding: 24px; background: linear-gradient(180deg, #1E1E1E 0%, #171717 100%); border: 0.5px solid rgba(255,255,255,0.08); box-shadow: 0 24px 48px rgba(0,0,0,0.22); }
+        .session-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+        .session-summary-card { border-radius: 12px; padding: 12px 14px; background-color: #202020; border: 0.5px solid rgba(255,255,255,0.06); }
+        .session-summary-label { color: #7A7A7A; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+        .session-summary-value { color: #fff; font-size: 20px; font-weight: 800; line-height: 1; }
         .exercise-card { border: 0.5px solid rgba(255,255,255,0.08); border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, #252525 0%, #1D1D1D 100%); }
         .exercise-card + .exercise-card { margin-top: 12px; }
         .exercise-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; }
@@ -569,7 +760,10 @@ export default function WorkoutPage() {
           .workout-wrapper { padding: 72px 16px 24px; }
           .workout-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
           .workout-grid { grid-template-columns: 1fr; gap: 24px; }
+          .workout-primary { order: 1; }
+          .workout-secondary { order: 2; }
           .session-shell { position: static; }
+          .session-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .set-row-grid { grid-template-columns: 1fr 1fr; }
           .field-group.previous-group { grid-column: span 2; }
           .field-group.done-group { grid-column: span 2; }
@@ -613,9 +807,12 @@ export default function WorkoutPage() {
         )}
 
         <div className="workout-grid">
-          <div>
+          <div className="workout-secondary">
             <div style={{ marginBottom: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <h2 className="text-white font-bold text-lg mb-4">Find Exercises</h2>
+              <h2 className="text-white font-bold text-lg mb-2">{workoutActive ? 'Add Another Exercise' : 'Find Exercises'}</h2>
+              <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 16 }}>
+                Search for movements and add them into your active session.
+              </p>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Search size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
@@ -729,6 +926,37 @@ export default function WorkoutPage() {
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
                           <Dumbbell size={12} /> {workout.exercises.length} exercises
                         </span>
+                        <button
+                          onClick={() => repeatRecentWorkout(workout)}
+                          style={{
+                            color: '#E8002D',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            fontFamily: 'inherit',
+                            padding: 0,
+                          }}
+                        >
+                          Repeat
+                        </button>
+                        <button
+                          onClick={() => void deleteRecentWorkout(workout.id, workout.name)}
+                          disabled={deletingWorkoutId === workout.id}
+                          style={{
+                            color: deletingWorkoutId === workout.id ? '#606060' : '#A0A0A0',
+                            background: 'none',
+                            border: 'none',
+                            cursor: deletingWorkoutId === workout.id ? 'not-allowed' : 'pointer',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            fontFamily: 'inherit',
+                            padding: 0,
+                          }}
+                        >
+                          {deletingWorkoutId === workout.id ? 'Deleting...' : 'Delete'}
+                        </button>
                       </div>
                       {expandedRecentWorkout === workout.id ? (
                         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -762,9 +990,87 @@ export default function WorkoutPage() {
                 </div>
               )}
             </div>
+
+            <div style={{ marginTop: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-white font-bold text-lg">Workout Templates</h2>
+                  <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 4 }}>Save a workout layout once and reuse it later.</p>
+                </div>
+                <button
+                  onClick={saveCurrentWorkoutAsTemplate}
+                  disabled={activeExercises.length === 0}
+                  style={{
+                    backgroundColor: activeExercises.length === 0 ? '#2A2A2A' : 'rgba(232,0,45,0.12)',
+                    color: activeExercises.length === 0 ? '#606060' : '#E8002D',
+                    border: activeExercises.length === 0 ? '0.5px solid rgba(255,255,255,0.08)' : '0.5px solid rgba(232,0,45,0.4)',
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: activeExercises.length === 0 ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Save Current
+                </button>
+              </div>
+
+              {templates.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>No templates yet. Start a session and save one when it feels right.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {templates.map(template => (
+                    <div key={template.id} style={{ padding: 14, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ color: '#fff', fontWeight: 600 }}>{template.name}</p>
+                          <p style={{ color: '#A0A0A0', fontSize: 12, marginTop: 4 }}>
+                            {template.exercises.length} exercises · {template.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)} sets
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => applyTemplate(template)}
+                            style={{
+                              color: '#E8002D',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              fontFamily: 'inherit',
+                              padding: 0,
+                            }}
+                          >
+                            Use
+                          </button>
+                          <button
+                            onClick={() => deleteTemplate(template.id)}
+                            style={{
+                              color: '#A0A0A0',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              fontFamily: 'inherit',
+                              padding: 0,
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div>
+          <div className="workout-primary">
             <div className="session-shell">
               <div className="flex items-center justify-between mb-5">
                 <div>
@@ -775,15 +1081,16 @@ export default function WorkoutPage() {
                       background: 'none',
                       border: 'none',
                       color: '#fff',
-                      fontSize: 18,
-                      fontWeight: 700,
+                      fontSize: 26,
+                      fontWeight: 800,
                       outline: 'none',
                       padding: 0,
                       width: '100%',
+                      letterSpacing: '-0.03em',
                     }}
                   />
-                  <p className="text-xs mt-0.5" style={{ color: '#A0A0A0' }}>
-                    {activeExercises.length} exercises
+                  <p className="text-sm mt-1" style={{ color: '#A0A0A0' }}>
+                    {activeExercises.length} exercises in this session
                   </p>
                 </div>
                 <div className="mini-meta">
@@ -798,13 +1105,35 @@ export default function WorkoutPage() {
                 </div>
               </div>
 
+              <div className="session-summary">
+                <div className="session-summary-card">
+                  <div className="session-summary-label">Exercises</div>
+                  <div className="session-summary-value">{activeExercises.length}</div>
+                </div>
+                <div className="session-summary-card">
+                  <div className="session-summary-label">Total Sets</div>
+                  <div className="session-summary-value">{totalSetCount}</div>
+                </div>
+                <div className="session-summary-card">
+                  <div className="session-summary-label">Completed</div>
+                  <div className="session-summary-value">{completedSetCount}</div>
+                </div>
+                <div className="session-summary-card">
+                  <div className="session-summary-label">Rest</div>
+                  <div className="session-summary-value" style={{ color: restActive ? '#E8002D' : '#fff' }}>
+                    {restActive ? restTimerLabel : 'Off'}
+                  </div>
+                </div>
+              </div>
+
               {activeExercises.length === 0 ? (
                 <div className="py-16 text-center">
                   <Plus size={32} style={{ color: '#2A2A2A', margin: '0 auto 12px' }} />
-                  <p style={{ color: '#A0A0A0', fontSize: 14 }}>Add exercises from the search to start your workout</p>
+                  <p style={{ color: '#fff', fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Start by adding your first exercise</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 14 }}>Use the search panel to build your workout session.</p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[680px] overflow-y-auto pr-1">
                   {activeExercises.map((exercise, exerciseIndex) => (
                     <div key={exercise.id} className="exercise-card">
                       <div
@@ -983,6 +1312,12 @@ export default function WorkoutPage() {
                           </div>
                           <div className="session-toolbar">
                             <button
+                              onClick={saveCurrentWorkoutAsTemplate}
+                              className="session-link-btn"
+                            >
+                              Save Template
+                            </button>
+                            <button
                               onClick={() => addSet(exercise.id)}
                               className="session-link-btn"
                               style={{ color: '#E8002D' }}
@@ -1019,6 +1354,32 @@ export default function WorkoutPage() {
 function parseOptionalNumber(value: string) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function loadWorkoutTemplates(): WorkoutTemplate[] {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const raw = window.localStorage.getItem(WORKOUT_TEMPLATES_KEY)
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistWorkoutTemplates(templates: WorkoutTemplate[]) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(WORKOUT_TEMPLATES_KEY, JSON.stringify(templates))
 }
 
 function formatElapsedTime(totalSeconds: number) {

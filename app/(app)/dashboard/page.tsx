@@ -15,6 +15,7 @@ type WorkoutRow = Database['public']['Tables']['workouts']['Row']
 type FoodEntryRow = Database['public']['Tables']['food_entries']['Row']
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type PartnershipRow = Database['public']['Tables']['partnerships']['Row']
+type NudgeRow = Database['public']['Tables']['nudges']['Row']
 
 type ChartTooltipPayload = {
   dataKey?: string
@@ -57,6 +58,7 @@ export default function DashboardPage() {
   const [partnerProfile, setPartnerProfile] = useState<ProfileRow | null>(null)
   const [partnerWorkouts, setPartnerWorkouts] = useState<WorkoutRow[]>([])
   const [partnerFoodEntries, setPartnerFoodEntries] = useState<FoodEntryRow[]>([])
+  const [recentNudges, setRecentNudges] = useState<NudgeRow[]>([])
 
   const loadDashboard = useCallback(async () => {
     if (!user) {
@@ -67,6 +69,7 @@ export default function DashboardPage() {
       setPartnerProfile(null)
       setPartnerWorkouts([])
       setPartnerFoodEntries([])
+      setRecentNudges([])
       setLoadingData(false)
       return
     }
@@ -121,13 +124,14 @@ export default function DashboardPage() {
       setPartnerProfile(null)
       setPartnerWorkouts([])
       setPartnerFoodEntries([])
+      setRecentNudges([])
       setLoadingData(false)
       return
     }
 
     const partnerId = partnership.user_one_id === user.id ? partnership.user_two_id : partnership.user_one_id
 
-    const [partnerProfileResult, partnerWorkoutsResult, partnerFoodResult] = await Promise.all([
+    const [partnerProfileResult, partnerWorkoutsResult, partnerFoodResult, nudgesResult] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', partnerId).single(),
       supabase
         .from('workouts')
@@ -141,17 +145,25 @@ export default function DashboardPage() {
         .eq('user_id', partnerId)
         .gte('entry_date', weekStartString)
         .order('entry_date', { ascending: false }),
+      supabase
+        .from('nudges')
+        .select('*')
+        .or(`and(sender_id.eq.${user.id},recipient_id.eq.${partnerId}),and(sender_id.eq.${partnerId},recipient_id.eq.${user.id})`)
+        .order('created_at', { ascending: false })
+        .limit(5),
     ])
 
-    if (partnerProfileResult.error || partnerWorkoutsResult.error || partnerFoodResult.error) {
+    if (partnerProfileResult.error || partnerWorkoutsResult.error || partnerFoodResult.error || nudgesResult.error) {
       console.error('Failed to load partner dashboard data', {
         partnerProfileError: partnerProfileResult.error,
         partnerWorkoutsError: partnerWorkoutsResult.error,
         partnerFoodError: partnerFoodResult.error,
+        nudgesError: nudgesResult.error,
       })
       setPartnerProfile(null)
       setPartnerWorkouts([])
       setPartnerFoodEntries([])
+      setRecentNudges([])
       setLoadingData(false)
       return
     }
@@ -159,6 +171,7 @@ export default function DashboardPage() {
     setPartnerProfile(partnerProfileResult.data)
     setPartnerWorkouts(partnerWorkoutsResult.data || [])
     setPartnerFoodEntries(partnerFoodResult.data || [])
+    setRecentNudges(nudgesResult.data || [])
     setLoadingData(false)
   }, [user])
 
@@ -173,11 +186,39 @@ export default function DashboardPage() {
   }, [authLoading, loadDashboard])
 
   const activeGoalCount = goals.filter(goal => goal.status === 'active').length
+  const completedGoalCount = goals.filter(goal => goal.status === 'completed').length
+  const dailyCalorieGoal = profile?.daily_calorie_goal ?? 2000
   const dashboardGoals = goals.slice(0, 2)
   const weeklyWorkoutCount = countWorkoutsThisWeek(yourWorkouts)
   const workoutMinutesThisWeek = sumWorkoutMinutesThisWeek(yourWorkouts)
   const workoutStreak = calculateWorkoutStreak(yourWorkouts)
   const recentWorkouts = yourWorkouts.slice(0, 3)
+  const todayString = toDateString(new Date())
+  const todayCalories = yourFoodEntries
+    .filter(entry => entry.entry_date === todayString)
+    .reduce((sum, entry) => sum + entry.calories, 0)
+  const todayCaloriesPercent = Math.min(100, Math.round((todayCalories / Math.max(dailyCalorieGoal, 1)) * 100))
+  const workedOutToday = yourHasWorkoutOnDate(yourWorkouts, todayString)
+  const loggedFoodToday = yourFoodEntries.some(entry => entry.entry_date === todayString)
+  const workoutConsistency = calculateWeeklyConsistency(yourWorkouts)
+  const nutritionConsistency = calculateNutritionConsistency(yourFoodEntries)
+  const checkInItems = [
+    {
+      label: 'Workout',
+      complete: workedOutToday,
+      description: workedOutToday ? 'You logged a workout today.' : 'No workout logged yet today.',
+    },
+    {
+      label: 'Nutrition',
+      complete: loggedFoodToday,
+      description: loggedFoodToday ? 'You logged food today.' : 'No food entries logged yet today.',
+    },
+    {
+      label: 'Goals',
+      complete: activeGoalCount > 0,
+      description: activeGoalCount > 0 ? `${activeGoalCount} active goals in progress.` : 'Create a goal to start tracking progress.',
+    },
+  ]
 
   const partnerId = activePartnership && user
     ? activePartnership.user_one_id === user.id
@@ -190,6 +231,16 @@ export default function DashboardPage() {
   const partnerWorkoutCount = countWorkoutsThisWeek(partnerWorkouts)
   const partnerStreak = calculateWorkoutStreak(partnerWorkouts)
   const partnerWorkedOutToday = yourHasWorkoutOnDate(partnerWorkouts, toDateString(new Date()))
+  const partnerTodayCalories = partnerFoodEntries
+    .filter(entry => entry.entry_date === todayString)
+    .reduce((sum, entry) => sum + entry.calories, 0)
+  const recentActivity = buildRecentActivityFeed({
+    recentWorkouts,
+    recentNudges,
+    partnerProfile,
+    partnerWorkouts,
+    partnerFoodEntries,
+  })
 
   const weeklyWorkoutData = useMemo(
     () => buildWeeklyWorkoutMinutes(yourWorkouts, partnerWorkouts),
@@ -272,6 +323,64 @@ export default function DashboardPage() {
             change={workoutStreak > 0 ? 'Based on workout dates' : 'Start with one workout'}
             changePositive={workoutStreak > 0}
           />
+          <StatCard
+            label="Today Calories"
+            value={loadingData ? '...' : todayCalories}
+            unit="kcal"
+            icon={<Flame size={16} />}
+            change={`Goal ${dailyCalorieGoal} kcal`}
+            changePositive={todayCalories > 0}
+          />
+        </div>
+
+        <div className="charts-grid" style={{ gridTemplateColumns: '1.2fr 0.8fr', marginBottom: 24 }}>
+          <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Today&apos;s Check-In</h2>
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>The three signals that matter most today.</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ color: '#fff', fontWeight: 800, fontSize: 22 }}>{todayCaloriesPercent}%</p>
+                <p style={{ color: '#A0A0A0', fontSize: 12 }}>calorie goal reached</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+              {checkInItems.map(item => (
+                <div key={item.label} style={{ borderRadius: 12, padding: 16, backgroundColor: '#252525' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{item.label}</span>
+                    <span style={{ color: item.complete ? '#4ade80' : '#A0A0A0', fontSize: 12, fontWeight: 700 }}>
+                      {item.complete ? 'Done' : 'Pending'}
+                    </span>
+                  </div>
+                  <p style={{ color: '#A0A0A0', fontSize: 13, lineHeight: 1.5 }}>{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+            <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Weekly Consistency</h2>
+            <p style={{ color: '#A0A0A0', fontSize: 14, marginBottom: 16 }}>How steady your habits have been so far this week.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { label: 'Workout consistency', value: workoutConsistency, accent: '#E8002D' },
+                { label: 'Nutrition consistency', value: nutritionConsistency, accent: '#ffffff' },
+                { label: 'Completed goals', value: activeGoalCount + completedGoalCount === 0 ? 0 : Math.round((completedGoalCount / Math.max(activeGoalCount + completedGoalCount, 1)) * 100), accent: '#4ade80' },
+              ].map(item => (
+                <div key={item.label}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#A0A0A0', fontSize: 12 }}>{item.label}</span>
+                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>{item.value}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: 8, borderRadius: 999, backgroundColor: '#252525' }}>
+                    <div style={{ width: `${item.value}%`, height: '100%', borderRadius: 999, backgroundColor: item.accent }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
@@ -402,6 +511,10 @@ export default function DashboardPage() {
                         <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{partnerWorkoutCount}</p>
                         <p style={{ color: '#A0A0A0', fontSize: 11 }}>This week</p>
                       </div>
+                      <div style={{ borderRadius: 10, padding: 12, textAlign: 'center', backgroundColor: '#252525', gridColumn: 'span 2' }}>
+                        <p style={{ color: '#fff', fontWeight: 900, fontSize: 20 }}>{partnerTodayCalories}</p>
+                        <p style={{ color: '#A0A0A0', fontSize: 11 }}>Calories logged today</p>
+                      </div>
                     </div>
                   </div>
 
@@ -480,6 +593,28 @@ export default function DashboardPage() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+
+            <div style={{ borderRadius: 16, padding: 20, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ color: '#fff', fontWeight: 600 }}>Recent Activity</h2>
+                <Link href="/partner" style={{ color: '#E8002D', fontSize: 13, fontWeight: 600, letterSpacing: '0.2px' }}>Partner view</Link>
+              </div>
+              {recentActivity.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Log workouts, food, or send a nudge to start filling your activity feed.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {recentActivity.map((item, index) => (
+                    <div key={`${item.label}-${index}`} style={{ borderRadius: 12, padding: 14, backgroundColor: '#252525' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{item.label}</p>
+                        <span style={{ color: '#A0A0A0', fontSize: 11 }}>{item.time}</span>
+                      </div>
+                      <p style={{ color: '#A0A0A0', fontSize: 13, lineHeight: 1.45 }}>{item.description}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -596,4 +731,104 @@ function getInitials(value: string) {
 
 function yourHasWorkoutOnDate(workouts: WorkoutRow[], dateString: string) {
   return workouts.some(workout => workout.workout_date === dateString)
+}
+
+function calculateWeeklyConsistency(workouts: WorkoutRow[]) {
+  const activeDays = new Set(
+    workouts
+      .filter(workout => new Date(workout.workout_date) >= startOfWeek(new Date()))
+      .map(workout => workout.workout_date)
+  )
+  const daysSoFar = getElapsedWeekdayCount()
+  return Math.round((activeDays.size / Math.max(daysSoFar, 1)) * 100)
+}
+
+function calculateNutritionConsistency(entries: FoodEntryRow[]) {
+  const activeDays = new Set(entries.map(entry => entry.entry_date))
+  const daysSoFar = getElapsedWeekdayCount()
+  return Math.round((activeDays.size / Math.max(daysSoFar, 1)) * 100)
+}
+
+function getElapsedWeekdayCount() {
+  const today = new Date()
+  const monday = startOfWeek(today)
+  const diffMs = today.getTime() - monday.getTime()
+  return Math.min(7, Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1))
+}
+
+function buildRecentActivityFeed({
+  recentWorkouts,
+  recentNudges,
+  partnerProfile,
+  partnerWorkouts,
+  partnerFoodEntries,
+}: {
+  recentWorkouts: WorkoutRow[]
+  recentNudges: NudgeRow[]
+  partnerProfile: ProfileRow | null
+  partnerWorkouts: WorkoutRow[]
+  partnerFoodEntries: FoodEntryRow[]
+}) {
+  const partnerFirstName = partnerProfile?.display_name?.split(' ')[0] ?? 'Your partner'
+  const items: { label: string; description: string; time: string; sortKey: number }[] = []
+
+  recentWorkouts.slice(0, 2).forEach(workout => {
+    items.push({
+      label: 'Workout logged',
+      description: `You completed "${workout.title}" for ${workout.duration_minutes} minutes.`,
+      time: formatRelativeDate(workout.workout_date),
+      sortKey: new Date(`${workout.workout_date}T12:00:00`).getTime(),
+    })
+  })
+
+  partnerWorkouts.slice(0, 2).forEach(workout => {
+    items.push({
+      label: 'Partner workout',
+      description: `${partnerFirstName} logged "${workout.title}" for ${workout.duration_minutes} minutes.`,
+      time: formatRelativeDate(workout.workout_date),
+      sortKey: new Date(`${workout.workout_date}T12:00:00`).getTime(),
+    })
+  })
+
+  partnerFoodEntries.slice(0, 1).forEach(entry => {
+    items.push({
+      label: 'Partner nutrition',
+      description: `${partnerFirstName} logged ${entry.food_name} for ${entry.calories} kcal.`,
+      time: formatRelativeDate(entry.entry_date),
+      sortKey: new Date(`${entry.entry_date}T11:00:00`).getTime(),
+    })
+  })
+
+  recentNudges.slice(0, 2).forEach(nudge => {
+    const sentAt = new Date(nudge.created_at)
+    items.push({
+      label: 'Nudge sent',
+      description: nudge.message,
+      time: sentAt.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      sortKey: sentAt.getTime(),
+    })
+  })
+
+  return items
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .slice(0, 5)
+    .map(({ label, description, time }) => ({ label, description, time }))
+}
+
+function formatRelativeDate(value: string) {
+  const today = toDateString(new Date())
+  if (value === today) {
+    return 'Today'
+  }
+
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (value === toDateString(yesterday)) {
+    return 'Yesterday'
+  }
+
+  return new Date(`${value}T00:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  })
 }

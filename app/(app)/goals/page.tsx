@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { Target, Plus, Users, Lock, Calendar, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
 
 type GoalRow = Database['public']['Tables']['goals']['Row']
+type ProfileRow = Database['public']['Tables']['profiles']['Row']
+type PartnershipRow = Database['public']['Tables']['partnerships']['Row']
 type GoalCategory = 'fitness' | 'weight' | 'nutrition'
 
 type GoalCard = {
@@ -19,6 +21,7 @@ type GoalCard = {
   category: GoalCategory
   targetDate?: string
   partnerCurrent?: number
+  ownerUserId: string
 }
 
 const CATEGORY_COLORS: Record<GoalCategory, string> = {
@@ -40,14 +43,6 @@ const CATEGORY_LABELS: Record<GoalCategory, string> = {
 }
 
 const UNITS = ['g', 'lbs', 'kg', 'min', 'km', 'miles', 'reps', 'kcal', 'glasses', 'steps', '%']
-
-// Mock partner goals for Priyana's tab
-const PARTNER_GOALS: GoalCard[] = [
-  { id: 'p1', title: 'Bench Press 225 lbs', current: 205, target: 225, unit: 'lbs', shared: true, category: 'fitness', partnerCurrent: 185 },
-  { id: 'p2', title: 'Run 5K under 25 min', current: 26, target: 25, unit: 'min', shared: true, category: 'fitness', partnerCurrent: 27 },
-  { id: 'p3', title: 'Lose 8 lbs', current: 5, target: 8, unit: 'lbs', shared: false, category: 'weight' },
-  { id: 'p4', title: 'Hit 120g protein daily', current: 100, target: 120, unit: 'g', shared: false, category: 'nutrition' },
-]
 
 // ── Circular ring component ────────────────────────────────────────────────
 function CircularRing({
@@ -110,6 +105,7 @@ function GoalCard({
   onDeleteGoal,
   progressDrafts,
   setProgressDrafts,
+  secondaryRingLabel,
 }: {
   g: GoalCard
   showDualRing?: boolean
@@ -121,6 +117,7 @@ function GoalCard({
   onDeleteGoal?: (goalId: string) => Promise<void>
   progressDrafts?: Record<string, string>
   setProgressDrafts?: Dispatch<SetStateAction<Record<string, string>>>
+  secondaryRingLabel?: string
 }) {
   const [todayMs] = useState(() => Date.now())
   const goalId = g.id
@@ -187,7 +184,7 @@ function GoalCard({
               pct={partnerPct ?? 0}
               color={CATEGORY_COLORS[g.category]}
               size={84}
-              label="Priyana"
+              label={secondaryRingLabel ?? 'Partner'}
             />
           )}
         </div>
@@ -371,6 +368,9 @@ function GoalCard({
 export default function GoalsPage() {
   const { user, loading: authLoading } = useAuth()
   const [goals, setGoals] = useState<GoalCard[]>([])
+  const [partnerGoals, setPartnerGoals] = useState<GoalCard[]>([])
+  const [partnerProfile, setPartnerProfile] = useState<ProfileRow | null>(null)
+  const [partnerId, setPartnerId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'mine' | 'partner' | 'shared'>('mine')
   const [showForm, setShowForm] = useState(false)
   const [newGoal, setNewGoal] = useState({
@@ -394,27 +394,107 @@ export default function GoalsPage() {
     const loadGoals = async () => {
       if (!user) {
         setGoals([])
+        setPartnerGoals([])
+        setPartnerProfile(null)
+        setPartnerId(null)
         setLoadingGoals(false)
         return
       }
+
       setLoadingGoals(true)
-      const { data, error } = await supabase
+
+      const { data: partnerships, error: partnershipError } = await supabase
+        .from('partnerships')
+        .select('*')
+        .eq('status', 'active')
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .limit(1)
+
+      if (partnershipError) {
+        console.error('Failed to load partnership for goals', partnershipError)
+        setErrorMessage('Could not load your goals right now.')
+        setGoals([])
+        setPartnerGoals([])
+        setPartnerProfile(null)
+        setLoadingGoals(false)
+        return
+      }
+
+      const activePartnership = partnerships?.[0] as PartnershipRow | undefined
+      const partnerId = activePartnership
+        ? activePartnership.user_one_id === user.id
+          ? activePartnership.user_two_id
+          : activePartnership.user_one_id
+        : null
+
+      setPartnerId(partnerId)
+
+      if (partnerId) {
+        const { data: nextPartnerProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', partnerId)
+          .maybeSingle()
+
+        setPartnerProfile(nextPartnerProfile)
+      } else {
+        setPartnerProfile(null)
+      }
+
+      let goalQuery = supabase
         .from('goals')
         .select('*')
         .order('created_at', { ascending: false })
+
+      goalQuery = partnerId
+        ? goalQuery.in('owner_user_id', [user.id, partnerId])
+        : goalQuery.eq('owner_user_id', user.id)
+
+      const { data, error } = await goalQuery
 
       if (error) {
         console.error('Failed to load goals', error)
         setErrorMessage('Could not load your goals right now.')
         setGoals([])
+        setPartnerGoals([])
         setLoadingGoals(false)
         return
       }
-      setGoals(data.map(mapGoalRowToCard))
+
+      const myGoals = data
+        .filter(goal => goal.owner_user_id === user.id)
+        .map(mapGoalRowToCard)
+      const nextPartnerGoals = partnerId
+        ? data
+            .filter(goal => goal.owner_user_id === partnerId)
+            .map(mapGoalRowToCard)
+        : []
+
+      setGoals(myGoals)
+      setPartnerGoals(nextPartnerGoals)
       setLoadingGoals(false)
     }
+
     if (!authLoading) void loadGoals()
   }, [authLoading, user])
+
+  const notifyPartnerGoalCompleted = async (goalTitle: string) => {
+    if (!user || !partnerId) {
+      return
+    }
+
+    const { error } = await supabase
+      .from('nudges')
+      .insert({
+        sender_id: user.id,
+        recipient_id: partnerId,
+        message: `Shared goal completed: ${goalTitle}`,
+      })
+
+    if (error) {
+      console.error('Failed to notify partner about goal completion', error)
+    }
+  }
 
   const addGoal = async () => {
     if (!user || !newGoal.title || !newGoal.target || !newGoal.unit) return
@@ -462,6 +542,16 @@ export default function GoalsPage() {
       ? prev.map(goal => (goal.id === editingGoalId ? savedGoal : goal))
       : [savedGoal, ...prev]
     )
+
+    const completedOnSave = payload.status === 'completed'
+    const sharedCompleted = payload.is_shared && completedOnSave
+    const previousGoal = editingGoalId ? goals.find(goal => goal.id === editingGoalId) : null
+    const wasAlreadyCompleted = previousGoal ? previousGoal.current >= previousGoal.target : false
+
+    if (sharedCompleted && (!editingGoalId || !wasAlreadyCompleted)) {
+      await notifyPartnerGoalCompleted(payload.title)
+    }
+
     setNewGoal({ title: '', current: '', target: '', unit: '', shared: false, category: 'fitness', targetDate: '' })
     setEditingGoalId(null)
     setShowForm(false)
@@ -521,6 +611,11 @@ export default function GoalsPage() {
 
     setGoals(prev => prev.map(goal => (goal.id === goalId ? mapGoalRowToCard(data) : goal)))
     setProgressDrafts(prev => ({ ...prev, [goalId]: String(nextValue) }))
+
+    if (matchingGoal.shared && nextStatus === 'completed' && matchingGoal.current < matchingGoal.target) {
+      await notifyPartnerGoalCompleted(matchingGoal.title)
+    }
+
     setSavingGoalId(null)
   }
 
@@ -562,22 +657,49 @@ export default function GoalsPage() {
     setDeletingGoalId(null)
   }
 
+  const partnerLabel = partnerProfile?.display_name
+    ? `${partnerProfile.display_name.split(' ')[0]}'s Goals`
+    : 'Partner Goals'
+
   const TABS: { key: 'mine' | 'partner' | 'shared'; label: string }[] = [
     { key: 'mine', label: 'My Goals' },
-    { key: 'partner', label: "Priyana's Goals" },
+    { key: 'partner', label: partnerLabel },
     { key: 'shared', label: 'Shared' },
   ]
 
   const myActive = goals.filter(g => (g.current / g.target) * 100 < 100)
   const myCompleted = goals.filter(g => (g.current / g.target) * 100 >= 100)
-  const partnerActive = PARTNER_GOALS.filter(g => (g.current / g.target) * 100 < 100)
-  const partnerCompleted = PARTNER_GOALS.filter(g => (g.current / g.target) * 100 >= 100)
-  const sharedGoals = goals
-    .filter(g => g.shared)
-    .map(g => {
-      const match = PARTNER_GOALS.find(pg => pg.title === g.title)
-      return match ? { ...g, partnerCurrent: match.current } : g
-    })
+  const partnerActive = partnerGoals.filter(g => (g.current / g.target) * 100 < 100)
+  const partnerCompleted = partnerGoals.filter(g => (g.current / g.target) * 100 >= 100)
+  const partnerFirstName = partnerProfile?.display_name.split(' ')[0] ?? 'Partner'
+
+  const sharedGoalGroups = useMemo(() => {
+    const normalizeTitle = (value: string) => value.trim().toLowerCase()
+    const partnerSharedLookup = new Map(
+      partnerGoals
+        .filter(goal => goal.shared)
+        .map(goal => [normalizeTitle(goal.title), goal])
+    )
+
+    const ownShared = goals
+      .filter(goal => goal.shared)
+      .map(goal => {
+        const partnerMatch = partnerSharedLookup.get(normalizeTitle(goal.title))
+        return {
+          ...goal,
+          partnerCurrent: partnerMatch?.current,
+        }
+      })
+
+    const partnerSharedOnly = partnerGoals
+      .filter(goal => goal.shared)
+      .filter(goal => !goals.some(myGoal => myGoal.shared && normalizeTitle(myGoal.title) === normalizeTitle(goal.title)))
+
+    return {
+      ownShared,
+      partnerSharedOnly,
+    }
+  }, [goals, partnerGoals])
 
   return (
     <>
@@ -743,7 +865,7 @@ export default function GoalsPage() {
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
               <Target size={40} style={{ color: '#2A2A2A', margin: '0 auto 16px', display: 'block' }} />
               <p style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>No goals yet</p>
-              <p style={{ color: '#A0A0A0', fontSize: 14 }}>Set your first goal and crush it with Priyana</p>
+              <p style={{ color: '#A0A0A0', fontSize: 14 }}>Set your first goal and start tracking progress.</p>
             </div>
           ) : (
             <>
@@ -787,23 +909,35 @@ export default function GoalsPage() {
             </>
           )
         ) : activeTab === 'partner' ? (
-          /* ── Priyana's Goals ── */
-          <>
-            <div className="goals-grid">
-              {partnerActive.map(g => <GoalCard key={g.id} g={g} />)}
+          !partnerProfile ? (
+            <div style={{ textAlign: 'center', padding: '80px 0' }}>
+              <Users size={40} style={{ color: '#2A2A2A', margin: '0 auto 16px', display: 'block' }} />
+              <p style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>No partner connected</p>
+              <p style={{ color: '#A0A0A0', fontSize: 14 }}>Connect with a partner to see their goals here.</p>
             </div>
-            {partnerCompleted.length > 0 && (
-              <div style={{ marginTop: 40 }}>
-                <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Completed Goals 🎉</h2>
-                <div className="goals-grid">
-                  {partnerCompleted.map(g => <GoalCard key={g.id} g={g} />)}
-                </div>
+          ) : partnerActive.length === 0 && partnerCompleted.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '80px 0' }}>
+              <Target size={40} style={{ color: '#2A2A2A', margin: '0 auto 16px', display: 'block' }} />
+              <p style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>{partnerFirstName} has no goals yet</p>
+              <p style={{ color: '#A0A0A0', fontSize: 14 }}>Shared and partner goals will show up here once they create them.</p>
+            </div>
+          ) : (
+            <>
+              <div className="goals-grid">
+                {partnerActive.map(g => <GoalCard key={g.id} g={g} />)}
               </div>
-            )}
-          </>
+              {partnerCompleted.length > 0 && (
+                <div style={{ marginTop: 40 }}>
+                  <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Completed Goals 🎉</h2>
+                  <div className="goals-grid">
+                    {partnerCompleted.map(g => <GoalCard key={g.id} g={g} />)}
+                  </div>
+                </div>
+              )}
+            </>
+          )
         ) : (
-          /* ── Shared Goals ── */
-          sharedGoals.length === 0 ? (
+          sharedGoalGroups.ownShared.length === 0 && sharedGoalGroups.partnerSharedOnly.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
               <Users size={40} style={{ color: '#2A2A2A', margin: '0 auto 16px', display: 'block' }} />
               <p style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>No shared goals yet</p>
@@ -811,11 +945,12 @@ export default function GoalsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {sharedGoals.map(g => (
+              {sharedGoalGroups.ownShared.map(g => (
                 <GoalCard
                   key={g.id}
                   g={g}
-                  showDualRing
+                  showDualRing={typeof g.partnerCurrent === 'number'}
+                  secondaryRingLabel={partnerFirstName}
                   editable
                   saving={savingGoalId === g.id}
                   deleting={deletingGoalId === g.id}
@@ -824,6 +959,12 @@ export default function GoalsPage() {
                   onDeleteGoal={deleteGoal}
                   progressDrafts={progressDrafts}
                   setProgressDrafts={setProgressDrafts}
+                />
+              ))}
+              {sharedGoalGroups.partnerSharedOnly.map(g => (
+                <GoalCard
+                  key={g.id}
+                  g={g}
                 />
               ))}
             </div>
@@ -846,6 +987,7 @@ function mapGoalRowToCard(goal: GoalRow): GoalCard {
     shared: goal.is_shared,
     category,
     targetDate: goal.deadline ?? undefined,
+    ownerUserId: goal.owner_user_id,
   }
 }
 
