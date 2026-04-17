@@ -500,174 +500,63 @@ export default function FoodPage() {
                 </button>
               </div>
 
-              {favoriteShortcuts.length > 0 && (
-                <div style={{ marginBottom: 20 }}>
+              {/* ── Search results appear immediately below the search bar ── */}
+              {searching && (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <p style={{ color: '#A0A0A0', fontSize: 14 }}>Searching...</p>
+                </div>
+              )}
+
+              {results.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Pinned Favorites</p>
-                    <span style={{ color: '#606060', fontSize: 11 }}>One-tap foods you reuse often</span>
+                    <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Results for &ldquo;{query}&rdquo;</p>
+                    <button
+                      onClick={() => { setResults([]); setHasSearched(false); setQuery('') }}
+                      style={{ background: 'none', border: 'none', color: '#A0A0A0', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}
+                    >
+                      Clear
+                    </button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {favoriteShortcuts.map(shortcut => (
-                      <div
-                        key={`favorite-${shortcut.key}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          backgroundColor: '#252525',
-                          border: '0.5px solid rgba(255,255,255,0.08)',
-                        }}
-                      >
-                        <button
-                          onClick={() => void quickAddShortcut(shortcut)}
-                          disabled={quickAddingKey === shortcut.key}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#fff',
-                            cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
-                            fontFamily: 'inherit',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            textAlign: 'left',
-                            padding: 0,
-                          }}
-                        >
-                          {shortcut.name}
-                        </button>
-                        <button
-                          onClick={() => toggleFavoriteShortcut(shortcut)}
-                          style={{ background: 'none', border: 'none', color: '#E8002D', cursor: 'pointer', padding: 0 }}
-                          aria-label={`Remove ${shortcut.name} from favorites`}
-                        >
-                          <Star size={14} fill="currentColor" />
-                        </button>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 420, overflowY: 'auto' }}>
+                    {results.map((food, i) => {
+                      const shortcut = foodResultToShortcut(food)
+                      const favorite = isFavoriteShortcut(shortcut.key)
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ minWidth: 0, flex: 1, marginRight: 12 }}>
+                            <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{food.name}</p>
+                            <p style={{ color: '#A0A0A0', fontSize: 11, marginTop: 2 }}>
+                              {food.brand && `${food.brand} · `}{Math.round(food.calories)} kcal · {food.servingDescription}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <button
+                              onClick={() => toggleFavoriteShortcut(shortcut)}
+                              style={{ background: 'none', border: 'none', color: favorite ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
+                              aria-label={`${favorite ? 'Remove' : 'Add'} ${food.name} favorite`}
+                            >
+                              <Star size={14} fill={favorite ? 'currentColor' : 'none'} />
+                            </button>
+                            <button
+                              onClick={() => { setServingSize('1'); setAddingFood(food) }}
+                              style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
 
-              {(recentShortcuts.length > 0 || frequentShortcuts.length > 0) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
-                  {recentShortcuts.length > 0 && (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Recent Foods</p>
-                        <span style={{ color: '#606060', fontSize: 11 }}>Quick add to {selectedMeal}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {recentShortcuts.map(shortcut => (
-                          <div
-                            key={`recent-${shortcut.key}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: 8,
-                              backgroundColor: '#252525',
-                              border: '0.5px solid rgba(255,255,255,0.08)',
-                              borderRadius: 10,
-                              padding: '10px 12px',
-                              minWidth: 150,
-                            }}
-                          >
-                            <button
-                              onClick={() => void quickAddShortcut(shortcut)}
-                              disabled={quickAddingKey === shortcut.key}
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'flex-start',
-                                gap: 2,
-                                background: 'none',
-                                border: 'none',
-                                cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
-                                fontFamily: 'inherit',
-                                opacity: quickAddingKey === shortcut.key ? 0.7 : 1,
-                                padding: 0,
-                                flex: 1,
-                              }}
-                            >
-                              <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>{shortcut.name}</span>
-                              <span style={{ color: '#A0A0A0', fontSize: 11, textAlign: 'left' }}>
-                                {shortcut.calories} kcal · {shortcut.servingAmount} {shortcut.servingUnit}
-                              </span>
-                            </button>
-                            <button
-                              onClick={() => toggleFavoriteShortcut(shortcut)}
-                              style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
-                              aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}
-                            >
-                              <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {frequentShortcuts.length > 0 && (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Most Logged</p>
-                        <span style={{ color: '#606060', fontSize: 11 }}>Your go-to foods</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {frequentShortcuts.map(shortcut => (
-                          <div
-                            key={`frequent-${shortcut.key}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 10,
-                              padding: '10px 12px',
-                              backgroundColor: '#252525',
-                              borderRadius: 10,
-                              border: '0.5px solid rgba(255,255,255,0.08)',
-                            }}
-                          >
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {shortcut.name}
-                              </p>
-                              <p style={{ color: '#A0A0A0', fontSize: 11 }}>
-                                Logged {shortcut.useCount} times · {shortcut.calories} kcal
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => void quickAddShortcut(shortcut)}
-                              disabled={quickAddingKey === shortcut.key}
-                              style={{
-                                backgroundColor: 'rgba(232,0,45,0.12)',
-                                color: '#E8002D',
-                                border: '0.5px solid rgba(232,0,45,0.4)',
-                                borderRadius: 8,
-                                padding: '6px 12px',
-                                fontWeight: 600,
-                                fontSize: 12,
-                                cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer',
-                                fontFamily: 'inherit',
-                                whiteSpace: 'nowrap',
-                                opacity: quickAddingKey === shortcut.key ? 0.7 : 1,
-                              }}
-                            >
-                              {quickAddingKey === shortcut.key ? 'Adding...' : '+ Quick Add'}
-                            </button>
-                            <button
-                              onClick={() => toggleFavoriteShortcut(shortcut)}
-                              style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
-                              aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}
-                            >
-                              <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              {results.length === 0 && !searching && hasSearched && query.trim() && (
+                <div style={{ textAlign: 'center', padding: '32px 0', marginBottom: 16 }}>
+                  <Flame size={28} style={{ color: '#2A2A2A', margin: '0 auto 10px' }} />
+                  <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No foods found for &ldquo;{query}&rdquo;</p>
+                  <p style={{ color: '#A0A0A0', fontSize: 13 }}>Try a more specific brand name or singular term like &ldquo;egg&rdquo;.</p>
                 </div>
               )}
 
@@ -716,60 +605,81 @@ export default function FoodPage() {
                 </div>
               )}
 
-              {/* Results */}
-              {results.length > 0 && (
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {results.map((food, i) => (
-                    (() => {
-                      const shortcut = foodResultToShortcut(food)
-                      const favorite = isFavoriteShortcut(shortcut.key)
-                      return (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: '#252525' }}>
-                      <div className="min-w-0 flex-1 mr-3">
-                        <p className="text-white text-sm font-semibold truncate">{food.name}</p>
-                        <p className="text-xs" style={{ color: '#A0A0A0' }}>
-                          {food.brand && `${food.brand} · `}
-                          {Math.round(food.calories)} kcal · {food.servingDescription}
-                        </p>
+              {/* ── Shortcuts: only visible when no search is active ── */}
+              {results.length === 0 && !searching && !hasSearched && (
+                <>
+                  {favoriteShortcuts.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Pinned Favorites</p>
+                        <span style={{ color: '#606060', fontSize: 11 }}>One-tap foods you reuse often</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <button
-                          onClick={() => toggleFavoriteShortcut(shortcut)}
-                          style={{ background: 'none', border: 'none', color: favorite ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }}
-                          aria-label={`${favorite ? 'Remove' : 'Add'} ${food.name} favorite`}
-                        >
-                          <Star size={14} fill={favorite ? 'currentColor' : 'none'} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setServingSize('1')
-                            setAddingFood(food)
-                          }}
-                          style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                        >
-                          + Add
-                        </button>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {favoriteShortcuts.map(shortcut => (
+                          <div key={`favorite-${shortcut.key}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                            <button onClick={() => void quickAddShortcut(shortcut)} disabled={quickAddingKey === shortcut.key} style={{ background: 'none', border: 'none', color: '#fff', cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, textAlign: 'left', padding: 0 }}>
+                              {shortcut.name}
+                            </button>
+                            <button onClick={() => toggleFavoriteShortcut(shortcut)} style={{ background: 'none', border: 'none', color: '#E8002D', cursor: 'pointer', padding: 0 }} aria-label={`Remove ${shortcut.name} from favorites`}>
+                              <Star size={14} fill="currentColor" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                      )
-                    })()
-                  ))}
-                </div>
-              )}
+                  )}
 
-              {results.length === 0 && !searching && hasSearched && query.trim() && (
-                <div className="text-center py-8">
-                  <Flame size={32} style={{ color: '#2A2A2A', margin: '0 auto 12px' }} />
-                  <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No foods found for &quot;{query}&quot;</p>
-                  <p style={{ color: '#A0A0A0', fontSize: 13 }}>Try a more specific brand name or singular term like &quot;egg&quot;.</p>
-                </div>
-              )}
+                  {(recentShortcuts.length > 0 || frequentShortcuts.length > 0) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+                      {recentShortcuts.length > 0 && (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Recent Foods</p>
+                            <span style={{ color: '#606060', fontSize: 11 }}>Quick add to {selectedMeal}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {recentShortcuts.map(shortcut => (
+                              <div key={`recent-${shortcut.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 12px', minWidth: 150 }}>
+                                <button onClick={() => void quickAddShortcut(shortcut)} disabled={quickAddingKey === shortcut.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, background: 'none', border: 'none', cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: quickAddingKey === shortcut.key ? 0.7 : 1, padding: 0, flex: 1 }}>
+                                  <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>{shortcut.name}</span>
+                                  <span style={{ color: '#A0A0A0', fontSize: 11, textAlign: 'left' }}>{shortcut.calories} kcal · {shortcut.servingAmount} {shortcut.servingUnit}</span>
+                                </button>
+                                <button onClick={() => toggleFavoriteShortcut(shortcut)} style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }} aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}>
+                                  <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-              {results.length === 0 && !searching && !query && !hasSearched && (
-                <div className="text-center py-8">
-                  <Flame size={32} style={{ color: '#2A2A2A', margin: '0 auto 12px' }} />
-                  <p style={{ color: '#A0A0A0', fontSize: 14 }}>Search for food to log your nutrition</p>
-                </div>
+                      {frequentShortcuts.length > 0 && (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <p style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Most Logged</p>
+                            <span style={{ color: '#606060', fontSize: 11 }}>Your go-to foods</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {frequentShortcuts.map(shortcut => (
+                              <div key={`frequent-${shortcut.key}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', backgroundColor: '#252525', borderRadius: 10, border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortcut.name}</p>
+                                  <p style={{ color: '#A0A0A0', fontSize: 11 }}>Logged {shortcut.useCount} times · {shortcut.calories} kcal</p>
+                                </div>
+                                <button onClick={() => void quickAddShortcut(shortcut)} disabled={quickAddingKey === shortcut.key} style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 12, cursor: quickAddingKey === shortcut.key ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: quickAddingKey === shortcut.key ? 0.7 : 1 }}>
+                                  {quickAddingKey === shortcut.key ? 'Adding...' : '+ Quick Add'}
+                                </button>
+                                <button onClick={() => toggleFavoriteShortcut(shortcut)} style={{ background: 'none', border: 'none', color: isFavoriteShortcut(shortcut.key) ? '#E8002D' : '#A0A0A0', cursor: 'pointer', padding: 0 }} aria-label={`${isFavoriteShortcut(shortcut.key) ? 'Remove' : 'Add'} ${shortcut.name} favorite`}>
+                                  <Star size={14} fill={isFavoriteShortcut(shortcut.key) ? 'currentColor' : 'none'} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
