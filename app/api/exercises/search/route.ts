@@ -3,35 +3,22 @@ import { NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type WgerExerciseTranslation = {
-  language?: number
+type ExerciseDbExercise = {
+  id?: string | number
+  exerciseId?: string | number
   name?: string
-  description?: string
-}
-
-type WgerNamedEntity = {
-  name?: string
-  name_en?: string
-}
-
-type WgerExerciseImage = {
-  image?: string
-  is_main?: boolean
-}
-
-type WgerExercise = {
-  id?: number
-  category?: WgerNamedEntity
-  muscles?: WgerNamedEntity[]
-  muscles_secondary?: WgerNamedEntity[]
-  equipment?: WgerNamedEntity[]
-  images?: WgerExerciseImage[]
-  translations?: WgerExerciseTranslation[]
-}
-
-type WgerResponse = {
-  results?: WgerExercise[]
-  next?: string | null
+  bodyPart?: string
+  bodyParts?: string[]
+  target?: string
+  targetMuscles?: string[]
+  equipment?: string
+  equipments?: string[]
+  gifUrl?: string
+  imageUrl?: string
+  secondaryMuscles?: string[]
+  instructions?: string[]
+  keywords?: string[]
+  exerciseType?: string
 }
 
 type NormalizedExercise = {
@@ -46,21 +33,34 @@ type NormalizedExercise = {
   gifUrl: string
 }
 
-const ENGLISH_LANGUAGE_ID = 2
-const PAGE_LIMIT = 40
-const MAX_PAGES = 6
+const RAPID_API_HOST = process.env.EXERCISEDB_RAPIDAPI_HOST
+const RAPID_API_KEY = process.env.EXERCISEDB_RAPIDAPI_KEY
+const SEARCH_BASE_URL = 'https://edb-with-videos-and-images-by-ascendapi.p.rapidapi.com'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get('q')?.trim()
+  const debug = searchParams.get('debug') === '1'
 
   if (!query) {
     return NextResponse.json({ results: [] })
   }
 
+  if (!RAPID_API_HOST || !RAPID_API_KEY) {
+    return NextResponse.json(
+      { error: 'ExerciseDB API credentials are missing.' },
+      { status: 500 }
+    )
+  }
+
   try {
-    const exercises = await fetchMatchingExercises(query)
-    return NextResponse.json({ results: exercises })
+    const result = await fetchMatchingExercises(query, debug)
+
+    if (debug) {
+      return NextResponse.json(result)
+    }
+
+    return NextResponse.json({ results: result })
   } catch (error) {
     console.error('Exercise search request failed', error)
 
@@ -71,23 +71,70 @@ export async function GET(request: Request) {
   }
 }
 
-async function fetchMatchingExercises(query: string) {
+async function fetchMatchingExercises(query: string, debug = false) {
   const normalizedQuery = normalizeText(query)
-  const collected: NormalizedExercise[] = []
-  let nextUrl: string | null = `https://wger.de/api/v2/exerciseinfo/?language=${ENGLISH_LANGUAGE_ID}&limit=${PAGE_LIMIT}`
-  let page = 0
+  const candidateUrls = [
+    `${SEARCH_BASE_URL}/api/v1/exercises?limit=12&offset=0&name=${encodeURIComponent(query)}`,
+    `${SEARCH_BASE_URL}/api/v1/exercises?name=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises?search=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises/search?query=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises/search?search=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises/search?q=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises/search/${encodeURIComponent(query)}?limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises-by-search/${encodeURIComponent(query)}?limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/search/${encodeURIComponent(query)}?limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/search?q=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/search?query=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/exercises/search/${encodeURIComponent(query)}?limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/exercises/search?q=${encodeURIComponent(query)}&limit=12&offset=0`,
+    `${SEARCH_BASE_URL}/search/${encodeURIComponent(query)}?limit=12&offset=0`,
+  ]
 
-  while (nextUrl && page < MAX_PAGES && collected.length < 12) {
-    const response = await fetch(nextUrl, { cache: 'no-store' })
-    const payload = (await response.json().catch(() => null)) as WgerResponse | null
+  let lastError = 'ExerciseDB search failed.'
+  let exercises: ExerciseDbExercise[] = []
+  const debugAttempts: Array<{ url: string; ok: boolean; sample: unknown }> = []
 
-    if (!response.ok) {
-      throw new Error('wger exercise search failed.')
+  for (const url of candidateUrls) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-key': RAPID_API_KEY as string,
+        'x-rapidapi-host': RAPID_API_HOST as string,
+      },
+      cache: 'no-store',
+    })
+
+    const payload = (await response.json().catch(() => null)) as
+      | ExerciseDbExercise[]
+      | { results?: ExerciseDbExercise[]; data?: ExerciseDbExercise[]; message?: string }
+      | null
+
+    if (debug) {
+      debugAttempts.push({
+        url,
+        ok: response.ok,
+        sample: payload,
+      })
     }
 
-    const pageMatches = (payload?.results || [])
-      .map(exercise => normalizeExercise(exercise))
-      .filter((exercise): exercise is NormalizedExercise => exercise !== null)
+    if (!response.ok) {
+      lastError =
+        typeof payload === 'object' && payload && 'message' in payload && payload.message
+          ? payload.message
+          : lastError
+      continue
+    }
+
+    exercises = extractExercises(payload)
+
+    if (exercises.length > 0) {
+      break
+    }
+  }
+
+  if (exercises.length === 0) {
+    const fallbackExercises = await fetchExerciseFallbackPool()
+    exercises = fallbackExercises
       .map(exercise => ({
         exercise,
         score: scoreExercise(exercise, normalizedQuery),
@@ -95,96 +142,150 @@ async function fetchMatchingExercises(query: string) {
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .map(item => item.exercise)
-
-    for (const exercise of pageMatches) {
-      if (!collected.some(existing => existing.id === exercise.id)) {
-        collected.push(exercise)
-      }
-      if (collected.length >= 8) {
-        break
-      }
-    }
-
-    nextUrl = payload?.next || null
-    page += 1
   }
 
-  return collected.slice(0, 8)
+  if (debug) {
+    return {
+      results: exercises
+        .map(normalizeExercise)
+        .filter((exercise): exercise is NormalizedExercise => exercise !== null)
+        .slice(0, 8),
+      rawCount: exercises.length,
+      lastError,
+      debugAttempts,
+    }
+  }
+
+  if (exercises.length === 0) {
+    throw new Error(lastError)
+  }
+
+  return exercises
+    .map(normalizeExercise)
+    .filter((exercise): exercise is NormalizedExercise => exercise !== null)
+    .slice(0, 8)
 }
 
-function normalizeExercise(exercise: WgerExercise): NormalizedExercise | null {
-  const translation = pickEnglishTranslation(exercise.translations)
-  const name = translation?.name?.trim()
+function extractExercises(
+  payload: ExerciseDbExercise[] | { results?: ExerciseDbExercise[]; data?: ExerciseDbExercise[] } | null
+) {
+  if (Array.isArray(payload)) {
+    return payload
+  }
 
-  if (!exercise.id || !name) {
+  if (payload?.results && Array.isArray(payload.results)) {
+    return payload.results
+  }
+
+  if (payload?.data && Array.isArray(payload.data)) {
+    return payload.data
+  }
+
+  return []
+}
+
+function normalizeExercise(exercise: ExerciseDbExercise): NormalizedExercise | null {
+  const name = exercise.name?.trim()
+  const id = exercise.id != null ? String(exercise.id) : exercise.exerciseId != null ? String(exercise.exerciseId) : ''
+
+  if (!name || !id) {
     return null
   }
 
-  const mainImage = pickExerciseImage(exercise.images)
-  const instructions = translation?.description ? stripHtml(translation.description) : ''
+  const instructions = Array.isArray(exercise.instructions)
+    ? exercise.instructions.filter(Boolean).join(' ')
+    : ''
 
   return {
-    id: String(exercise.id),
+    id,
     name,
-    type: exercise.category?.name?.trim() || 'strength',
-    muscle: pickMuscleName(exercise.muscles, exercise.muscles_secondary) || 'full body',
-    equipment: pickEquipmentName(exercise.equipment) || 'bodyweight',
-    difficulty: 'intermediate',
+    type:
+      exercise.exerciseType?.trim().toLowerCase() ||
+      exercise.bodyPart?.trim().toLowerCase() ||
+      exercise.bodyParts?.[0]?.trim().toLowerCase() ||
+      'strength',
+    muscle:
+      exercise.target?.trim().toLowerCase() ||
+      exercise.targetMuscles?.[0]?.trim().toLowerCase() ||
+      exercise.secondaryMuscles?.[0]?.trim().toLowerCase() ||
+      'full body',
+    equipment:
+      exercise.equipment?.trim().toLowerCase() ||
+      exercise.equipments?.[0]?.trim().toLowerCase() ||
+      'bodyweight',
+    difficulty: inferDifficulty(exercise),
     instructions,
-    source: 'wger',
-    gifUrl: mainImage || '',
+    source: 'exercisedb',
+    gifUrl: exercise.gifUrl?.trim() || exercise.imageUrl?.trim() || '',
   }
 }
 
-function pickEnglishTranslation(translations: WgerExerciseTranslation[] | undefined) {
-  if (!Array.isArray(translations)) {
-    return null
+async function fetchExerciseFallbackPool() {
+  const fallbackUrls = [
+    `${SEARCH_BASE_URL}/api/v1/exercises?limit=100&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises?limit=200&offset=0`,
+    `${SEARCH_BASE_URL}/api/v1/exercises`,
+    `${SEARCH_BASE_URL}/exercises?limit=100&offset=0`,
+    `${SEARCH_BASE_URL}/exercises`,
+  ]
+
+  for (const url of fallbackUrls) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-key': RAPID_API_KEY as string,
+        'x-rapidapi-host': RAPID_API_HOST as string,
+      },
+      cache: 'no-store',
+    })
+
+    const payload = (await response.json().catch(() => null)) as
+      | ExerciseDbExercise[]
+      | { results?: ExerciseDbExercise[]; data?: ExerciseDbExercise[] }
+      | null
+
+    if (!response.ok) {
+      continue
+    }
+
+    const extracted = extractExercises(payload)
+    if (extracted.length > 0) {
+      return extracted
+    }
   }
 
-  return (
-    translations.find(translation => translation.language === ENGLISH_LANGUAGE_ID && translation.name) ||
-    translations.find(translation => !!translation.name) ||
-    null
+  return []
+}
+
+function scoreExercise(exercise: ExerciseDbExercise, normalizedQuery: string) {
+  const haystack = normalizeText(
+    [
+      exercise.name,
+      exercise.target,
+      exercise.bodyPart,
+      ...(exercise.bodyParts || []),
+      exercise.equipment,
+      ...(exercise.equipments || []),
+      ...(exercise.targetMuscles || []),
+      ...(exercise.secondaryMuscles || []),
+      ...(exercise.instructions || []),
+      ...(exercise.keywords || []),
+    ]
+      .filter(Boolean)
+      .join(' ')
   )
-}
 
-function pickExerciseImage(images: WgerExerciseImage[] | undefined) {
-  if (!Array.isArray(images) || images.length === 0) {
-    return ''
-  }
-
-  return images.find(image => image.is_main)?.image || images[0].image || ''
-}
-
-function pickMuscleName(primary: WgerNamedEntity[] | undefined, secondary: WgerNamedEntity[] | undefined) {
-  const candidate = [...(primary || []), ...(secondary || [])].find(muscle => muscle.name_en || muscle.name)
-  return candidate?.name_en?.trim() || candidate?.name?.trim() || ''
-}
-
-function pickEquipmentName(equipment: WgerNamedEntity[] | undefined) {
-  const candidate = (equipment || []).find(item => item.name)
-  return candidate?.name?.trim() || ''
-}
-
-function scoreExercise(exercise: NormalizedExercise, normalizedQuery: string) {
-  const normalizedName = normalizeText(exercise.name)
-  const normalizedMuscle = normalizeText(exercise.muscle)
-  const normalizedEquipment = normalizeText(exercise.equipment)
-  const normalizedInstructions = normalizeText(exercise.instructions)
+  const normalizedName = normalizeText(exercise.name || '')
+  if (!normalizedName) return 0
 
   if (normalizedName === normalizedQuery) return 100
   if (normalizedName.startsWith(normalizedQuery)) return 80
   if (normalizedName.includes(normalizedQuery)) return 60
-  if (normalizedMuscle.includes(normalizedQuery)) return 30
-  if (normalizedEquipment.includes(normalizedQuery)) return 20
-  if (normalizedInstructions.includes(normalizedQuery)) return 10
 
   const queryWords = normalizedQuery.split(' ').filter(Boolean)
   if (queryWords.length === 0) return 0
 
-  const haystack = `${normalizedName} ${normalizedMuscle} ${normalizedEquipment} ${normalizedInstructions}`
   const matchingWords = queryWords.filter(word => haystack.includes(word)).length
-
   return matchingWords > 0 ? matchingWords * 8 : 0
 }
 
@@ -192,6 +293,10 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+function inferDifficulty(exercise: ExerciseDbExercise) {
+  const keywordText = normalizeText([...(exercise.keywords || []), exercise.name || ''].join(' '))
+
+  if (keywordText.includes('beginner')) return 'beginner'
+  if (keywordText.includes('advanced') || keywordText.includes('expert')) return 'expert'
+  return 'intermediate'
 }

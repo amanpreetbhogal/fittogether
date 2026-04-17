@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock, CalendarDays, ChevronLeft, ChevronRight, ClipboardPenLine, PlayCircle } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -75,6 +75,12 @@ interface WorkoutTemplate {
   }[]
 }
 
+interface LoggedWorkoutDraft {
+  title: string
+  durationMinutes: string
+  notes: string
+}
+
 type WorkoutRow = Database['public']['Tables']['workouts']['Row']
 type WorkoutExerciseRow = Database['public']['Tables']['workout_exercises']['Row']
 type ExerciseSetRow = Database['public']['Tables']['exercise_sets']['Row']
@@ -127,9 +133,16 @@ export default function WorkoutPage() {
   const [previousPerformanceLookup, setPreviousPerformanceLookup] = useState<PreviousSetLookup>({})
   const [templates, setTemplates] = useState<WorkoutTemplate[]>(() => loadWorkoutTemplates())
   const defaultWeightUnit: 'lbs' | 'kg' = profile?.preferred_weight_unit === 'kg' ? 'kg' : 'lbs'
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const dateLabel = useMemo(() => formatSelectedDateLabel(selectedDate), [selectedDate])
+  const [loggedWorkoutDraft, setLoggedWorkoutDraft] = useState<LoggedWorkoutDraft>({
+    title: '',
+    durationMinutes: '',
+    notes: '',
+  })
 
-  // View state: routines = landing page, building = routine builder, active = live session
-  const [view, setView] = useState<'routines' | 'building' | 'active'>('routines')
+  // View state: routines = landing page, building = routine builder, active = live session, logging = manual log flow
+  const [view, setView] = useState<'routines' | 'building' | 'active' | 'logging'>('routines')
   const [builderName, setBuilderName] = useState('')
   const [builderExercises, setBuilderExercises] = useState<BuilderExercise[]>([])
 
@@ -143,29 +156,43 @@ export default function WorkoutPage() {
     setLoadingRecentWorkouts(true)
     setWorkoutError(null)
 
-    const { data: workouts, error: workoutsError } = await supabase
-      .from('workouts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('workout_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(5)
+    const [selectedDateWorkoutsResult, recentHistoryResult] = await Promise.all([
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('workout_date', selectedDate)
+        .order('created_at', { ascending: false })
+        .limit(12),
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('workout_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20),
+    ])
 
-    if (workoutsError) {
-      console.error('Failed to load workouts', workoutsError)
-      setWorkoutError('Could not load your recent workouts right now.')
+    const workouts = selectedDateWorkoutsResult.data
+    const workoutsError = selectedDateWorkoutsResult.error
+    const historyWorkouts = recentHistoryResult.data
+    const historyWorkoutsError = recentHistoryResult.error
+
+    if (workoutsError || historyWorkoutsError) {
+      console.error('Failed to load workouts', workoutsError || historyWorkoutsError)
+      setWorkoutError('Could not load your workouts right now.')
       setRecentWorkouts([])
       setLoadingRecentWorkouts(false)
       return
     }
 
-    if (!workouts || workouts.length === 0) {
+    if (!historyWorkouts || historyWorkouts.length === 0) {
       setRecentWorkouts([])
       setLoadingRecentWorkouts(false)
       return
     }
 
-    const workoutIds = workouts.map(workout => workout.id)
+    const workoutIds = historyWorkouts.map(workout => workout.id)
     const { data: workoutExercises, error: exercisesError } = await supabase
       .from('workout_exercises')
       .select('*')
@@ -197,10 +224,10 @@ export default function WorkoutPage() {
       return
     }
 
-    const previousSetLookup = buildPreviousSetLookup(workouts, workoutExercises || [], exerciseSets || [])
+    const previousSetLookup = buildPreviousSetLookup(historyWorkouts, workoutExercises || [], exerciseSets || [])
 
     setPreviousPerformanceLookup(previousSetLookup)
-    setRecentWorkouts(mapRecentWorkouts(workouts, workoutExercises || [], exerciseSets || []))
+    setRecentWorkouts(mapRecentWorkouts(workouts || [], workoutExercises || [], exerciseSets || []))
     setActiveExercises(prev =>
       prev.map(exercise => ({
         ...exercise,
@@ -208,7 +235,7 @@ export default function WorkoutPage() {
       }))
     )
     setLoadingRecentWorkouts(false)
-  }, [user])
+  }, [selectedDate, user])
 
   useEffect(() => {
     if (!authLoading) {
@@ -488,6 +515,7 @@ export default function WorkoutPage() {
       .insert({
         user_id: user.id,
         title: workoutName.trim() || 'My Workout',
+        workout_date: selectedDate,
         duration_minutes: durationMinutes,
       })
       .select('*')
@@ -572,6 +600,44 @@ export default function WorkoutPage() {
     stopRestTimer()
     setSavingWorkout(false)
     setView('routines')
+  }
+
+  const saveLoggedWorkout = async () => {
+    if (!user || !loggedWorkoutDraft.title.trim()) {
+      setWorkoutError('Add a workout title before saving.')
+      return
+    }
+
+    setSavingWorkout(true)
+    setWorkoutError(null)
+
+    const durationMinutes = Number.parseInt(loggedWorkoutDraft.durationMinutes, 10)
+
+    const { error } = await supabase
+      .from('workouts')
+      .insert({
+        user_id: user.id,
+        title: loggedWorkoutDraft.title.trim(),
+        workout_date: selectedDate,
+        duration_minutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 0,
+        notes: loggedWorkoutDraft.notes.trim() || null,
+      })
+
+    if (error) {
+      console.error('Failed to save logged workout', error)
+      setWorkoutError('Could not log this workout right now.')
+      setSavingWorkout(false)
+      return
+    }
+
+    setLoggedWorkoutDraft({
+      title: '',
+      durationMinutes: '',
+      notes: '',
+    })
+    setSavingWorkout(false)
+    setView('routines')
+    await loadRecentWorkouts()
   }
 
   const repeatRecentWorkout = (workout: RecentWorkout) => {
@@ -868,21 +934,41 @@ export default function WorkoutPage() {
             )}
             <div>
               <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>
-                {view === 'routines' ? 'Workout' : view === 'building' ? (builderExercises.length > 0 || builderName ? (builderName || 'New Routine') : 'New Routine') : workoutName}
+                {view === 'routines'
+                  ? 'Workout'
+                  : view === 'building'
+                    ? (builderExercises.length > 0 || builderName ? (builderName || 'New Routine') : 'New Routine')
+                    : view === 'logging'
+                      ? 'Log Workout'
+                      : workoutName}
               </h1>
               <p style={{ color: '#A0A0A0', marginTop: 4, fontSize: 14 }}>
-                {view === 'routines' ? 'Your saved workout routines' : view === 'building' ? 'Name your routine and add exercises' : 'Log your sets — stay locked in'}
+                {view === 'routines'
+                  ? 'Choose a day, complete a routine, or manually log a workout'
+                  : view === 'building'
+                    ? 'Name your routine and add exercises'
+                    : view === 'logging'
+                      ? `Manual entry for ${dateLabel}`
+                      : `Complete your routine for ${dateLabel}`}
               </p>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
             {view === 'routines' && (
-              <button
-                onClick={() => openBuilder()}
-                style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <Plus size={16} /> New Routine
-              </button>
+              <>
+                <button
+                  onClick={() => setView('logging')}
+                  style={{ backgroundColor: '#252525', color: '#fff', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <ClipboardPenLine size={16} /> Log Workout
+                </button>
+                <button
+                  onClick={() => openBuilder()}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Plus size={16} /> New Routine
+                </button>
+              </>
             )}
             {view === 'building' && (
               <button
@@ -920,9 +1006,69 @@ export default function WorkoutPage() {
           </div>
         )}
 
+        <div style={{ marginBottom: 24, borderRadius: 16, padding: 16, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CalendarDays size={18} style={{ color: '#E8002D' }} />
+            <div>
+              <p style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Workout Date</p>
+              <p style={{ color: '#A0A0A0', fontSize: 12 }}>{dateLabel}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))} style={dateNavButtonStyle}>
+              <ChevronLeft size={14} />
+              Prev
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={event => setSelectedDate(event.target.value)}
+              style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', colorScheme: 'dark' }}
+            />
+            <button onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))} style={dateNavButtonStyle}>
+              Next
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+
         {/* ── ROUTINES VIEW ── */}
         {view === 'routines' && (
           <>
+            <div className="workout-grid-equal" style={{ marginBottom: 28 }}>
+              <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <PlayCircle size={22} style={{ color: '#E8002D' }} />
+                  <div>
+                    <p style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>Complete Workout</p>
+                    <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 2 }}>Start a routine and track sets, reps, weight, and rest.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => templates[0] ? applyTemplate(templates[0]) : openBuilder()}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {templates[0] ? 'Start a Routine' : 'Create Your First Routine'}
+                </button>
+              </div>
+
+              <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <ClipboardPenLine size={22} style={{ color: '#E8002D' }} />
+                  <div>
+                    <p style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>Log Workout</p>
+                    <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 2 }}>Quickly record a completed session for {dateLabel.toLowerCase()}.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setView('logging')}
+                  style={{ backgroundColor: '#252525', color: '#fff', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  Open Manual Log
+                </button>
+              </div>
+            </div>
+
             {templates.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '80px 0' }}>
                 <Dumbbell size={48} style={{ color: '#2A2A2A', margin: '0 auto 16px' }} />
@@ -970,11 +1116,12 @@ export default function WorkoutPage() {
 
             {/* Recent workouts */}
             <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Recent Workouts</h2>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Workouts on {dateLabel}</h2>
+              <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 16 }}>Use the date controls above to log or review a different day.</p>
               {loadingRecentWorkouts ? (
                 <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading...</p>
               ) : recentWorkouts.length === 0 ? (
-                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Your saved workouts will appear here.</p>
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>No workouts logged for this day yet.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {recentWorkouts.map(workout => (
@@ -1156,6 +1303,63 @@ export default function WorkoutPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── MANUAL LOGGING VIEW ── */}
+        {view === 'logging' && (
+          <div style={{ maxWidth: 720 }}>
+            <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 6 }}>Manual Workout Log</h2>
+              <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 20 }}>Record a finished workout for {dateLabel} without starting a live routine.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Workout Title</label>
+                  <input
+                    value={loggedWorkoutDraft.title}
+                    onChange={event => setLoggedWorkoutDraft(prev => ({ ...prev, title: event.target.value }))}
+                    placeholder="e.g. Upper Body, Run Club, Leg Day"
+                    style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '12px 14px', width: '100%', outline: 'none', fontSize: 14, fontFamily: 'inherit' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={loggedWorkoutDraft.durationMinutes}
+                    onChange={event => setLoggedWorkoutDraft(prev => ({ ...prev, durationMinutes: event.target.value }))}
+                    placeholder="45"
+                    style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '12px 14px', width: '100%', outline: 'none', fontSize: 14, fontFamily: 'inherit' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Notes</label>
+                  <textarea
+                    value={loggedWorkoutDraft.notes}
+                    onChange={event => setLoggedWorkoutDraft(prev => ({ ...prev, notes: event.target.value }))}
+                    placeholder="Optional notes about what you did, how it felt, or what to remember next time."
+                    rows={5}
+                    style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '12px 14px', width: '100%', outline: 'none', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => void saveLoggedWorkout()}
+                    disabled={savingWorkout}
+                    style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 600, fontSize: 14, cursor: savingWorkout ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingWorkout ? 0.7 : 1 }}
+                  >
+                    {savingWorkout ? 'Saving...' : 'Save Logged Workout'}
+                  </button>
+                  <button
+                    onClick={() => setView('routines')}
+                    style={{ backgroundColor: 'transparent', color: '#A0A0A0', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1518,6 +1722,46 @@ function persistWorkoutTemplates(templates: WorkoutTemplate[]) {
   }
 
   window.localStorage.setItem(WORKOUT_TEMPLATES_KEY, JSON.stringify(templates))
+}
+
+const dateNavButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  backgroundColor: '#252525',
+  border: '0.5px solid rgba(255,255,255,0.08)',
+  color: '#fff',
+  borderRadius: 10,
+  padding: '10px 12px',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+} as const
+
+function shiftDateString(dateString: string, days: number) {
+  const date = new Date(`${dateString}T12:00:00`)
+  date.setDate(date.getDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+function formatSelectedDateLabel(dateString: string) {
+  const selected = new Date(`${dateString}T12:00:00`)
+  const today = new Date()
+  const todayString = today.toISOString().slice(0, 10)
+  const yesterdayString = shiftDateString(todayString, -1)
+  const tomorrowString = shiftDateString(todayString, 1)
+
+  if (dateString === todayString) return 'Today'
+  if (dateString === yesterdayString) return 'Yesterday'
+  if (dateString === tomorrowString) return 'Tomorrow'
+
+  return selected.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 function formatElapsedTime(totalSeconds: number) {

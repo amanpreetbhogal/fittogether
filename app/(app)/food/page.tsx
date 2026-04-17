@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Search, Flame, Star, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Search, Flame, Star, X, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -88,8 +88,9 @@ export default function FoodPage() {
   const [frequentShortcuts, setFrequentShortcuts] = useState<FoodShortcut[]>([])
   const [quickAddingKey, setQuickAddingKey] = useState<string | null>(null)
   const [favoriteShortcuts, setFavoriteShortcuts] = useState<FoodShortcut[]>(() => loadFavoriteShortcuts())
-  const today = new Date().toISOString().slice(0, 10)
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const dailyCalorieGoal = profile?.daily_calorie_goal ?? 2000
+  const dateLabel = useMemo(() => formatSelectedDateLabel(selectedDate), [selectedDate])
 
   useEffect(() => {
     const loadFoods = async () => {
@@ -105,7 +106,7 @@ export default function FoodPage() {
         .from('food_entries')
         .select('*')
         .eq('user_id', user.id)
-        .eq('entry_date', today)
+        .eq('entry_date', selectedDate)
         .order('created_at', { ascending: false })
 
       const { data: historyData, error: historyError } = await supabase
@@ -135,7 +136,7 @@ export default function FoodPage() {
     if (!authLoading) {
       void loadFoods()
     }
-  }, [authLoading, today, user])
+  }, [authLoading, selectedDate, user])
 
   const searchFood = async () => {
     if (!query.trim()) return
@@ -179,6 +180,7 @@ export default function FoodPage() {
       .from('food_entries')
       .insert({
         user_id: user.id,
+        entry_date: selectedDate,
         meal_type: MEAL_TYPE_TO_DB[selectedMeal as keyof typeof MEAL_TYPE_TO_DB],
         food_name: food.name,
         brand: food.brand ?? null,
@@ -225,6 +227,7 @@ export default function FoodPage() {
       .from('food_entries')
       .insert({
         user_id: user.id,
+        entry_date: selectedDate,
         meal_type: MEAL_TYPE_TO_DB[selectedMeal as keyof typeof MEAL_TYPE_TO_DB],
         food_name: shortcut.name,
         brand: shortcut.brand ?? null,
@@ -378,7 +381,39 @@ export default function FoodPage() {
       <div className="food-wrapper">
         <div className="mb-8">
           <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Food Log</h1>
-          <p style={{ color: '#A0A0A0' }} className="mt-1">Track your nutrition for today</p>
+          <p style={{ color: '#A0A0A0' }} className="mt-1">Track your nutrition for any day, not just today</p>
+        </div>
+
+        <div style={{ marginBottom: 24, borderRadius: 16, padding: 16, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CalendarDays size={18} style={{ color: '#E8002D' }} />
+            <div>
+              <p style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Log Date</p>
+              <p style={{ color: '#A0A0A0', fontSize: 12 }}>{dateLabel}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))}
+              style={dateNavButtonStyle}
+            >
+              <ChevronLeft size={14} />
+              Prev
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={event => setSelectedDate(event.target.value)}
+              style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', colorScheme: 'dark' }}
+            />
+            <button
+              onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))}
+              style={dateNavButtonStyle}
+            >
+              Next
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
 
         {errorMessage && (
@@ -389,7 +424,7 @@ export default function FoodPage() {
 
         {/* Daily summary */}
         <div style={{ marginBottom: 32, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-          <h2 style={{ color: '#fff', fontWeight: 700, marginBottom: 20 }}>Today&apos;s Summary</h2>
+          <h2 style={{ color: '#fff', fontWeight: 700, marginBottom: 20 }}>Summary for {dateLabel}</h2>
           {/* Calories - centered on top */}
           {(() => {
             const pct = Math.min(100, Math.round((totals.calories / Math.max(dailyCalorieGoal, 1)) * 100))
@@ -927,4 +962,44 @@ function persistFavoriteShortcuts(shortcuts: FoodShortcut[]) {
   }
 
   window.localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(shortcuts))
+}
+
+const dateNavButtonStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  backgroundColor: '#252525',
+  border: '0.5px solid rgba(255,255,255,0.08)',
+  color: '#fff',
+  borderRadius: 10,
+  padding: '10px 12px',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+}
+
+function shiftDateString(dateString: string, days: number) {
+  const date = new Date(`${dateString}T12:00:00`)
+  date.setDate(date.getDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+function formatSelectedDateLabel(dateString: string) {
+  const selected = new Date(`${dateString}T12:00:00`)
+  const today = new Date()
+  const todayString = today.toISOString().slice(0, 10)
+  const yesterdayString = shiftDateString(todayString, -1)
+  const tomorrowString = shiftDateString(todayString, 1)
+
+  if (dateString === todayString) return 'Today'
+  if (dateString === yesterdayString) return 'Yesterday'
+  if (dateString === tomorrowString) return 'Tomorrow'
+
+  return selected.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
