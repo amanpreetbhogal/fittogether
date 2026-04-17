@@ -78,6 +78,17 @@ interface WorkoutTemplate {
 type WorkoutRow = Database['public']['Tables']['workouts']['Row']
 type WorkoutExerciseRow = Database['public']['Tables']['workout_exercises']['Row']
 type ExerciseSetRow = Database['public']['Tables']['exercise_sets']['Row']
+
+interface BuilderExercise {
+  id: string
+  name: string
+  muscle: string
+  equipment: string
+  difficulty: string
+  instructions: string
+  gifUrl: string
+  targetSets: number
+}
 type ExercisePreviousPerformance = {
   lastWorkoutDate: string
   lastSets: string[]
@@ -116,6 +127,11 @@ export default function WorkoutPage() {
   const [previousPerformanceLookup, setPreviousPerformanceLookup] = useState<PreviousSetLookup>({})
   const [templates, setTemplates] = useState<WorkoutTemplate[]>(() => loadWorkoutTemplates())
   const defaultWeightUnit: 'lbs' | 'kg' = profile?.preferred_weight_unit === 'kg' ? 'kg' : 'lbs'
+
+  // View state: routines = landing page, building = routine builder, active = live session
+  const [view, setView] = useState<'routines' | 'building' | 'active'>('routines')
+  const [builderName, setBuilderName] = useState('')
+  const [builderExercises, setBuilderExercises] = useState<BuilderExercise[]>([])
 
   const loadRecentWorkouts = useCallback(async () => {
     if (!user) {
@@ -555,6 +571,7 @@ export default function WorkoutPage() {
     setElapsedSeconds(0)
     stopRestTimer()
     setSavingWorkout(false)
+    setView('routines')
   }
 
   const repeatRecentWorkout = (workout: RecentWorkout) => {
@@ -597,6 +614,7 @@ export default function WorkoutPage() {
     stopRestTimer()
     setExpandedExercise(repeatedExercises[0]?.id ?? null)
     setWorkoutError(null)
+    setView('active')
   }
 
   const saveCurrentWorkoutAsTemplate = () => {
@@ -675,6 +693,7 @@ export default function WorkoutPage() {
     stopRestTimer()
     setExpandedExercise(templatedExercises[0]?.id ?? null)
     setWorkoutError(null)
+    setView('active')
   }
 
   const deleteTemplate = (templateId: string) => {
@@ -715,6 +734,70 @@ export default function WorkoutPage() {
     await loadRecentWorkouts()
   }
 
+  // ── Routine Builder functions ──────────────────────────────────────────
+  const openBuilder = (template?: WorkoutTemplate) => {
+    if (template) {
+      setBuilderName(template.name)
+      setBuilderExercises(template.exercises.map(ex => ({
+        id: crypto.randomUUID(),
+        name: ex.name,
+        muscle: ex.muscle,
+        equipment: ex.equipment,
+        difficulty: ex.difficulty,
+        instructions: ex.instructions,
+        gifUrl: ex.gifUrl,
+        targetSets: ex.sets.length > 0 ? ex.sets.length : 3,
+      })))
+    } else {
+      setBuilderName('')
+      setBuilderExercises([])
+    }
+    setSearchQuery('')
+    setSearchResults([])
+    setView('building')
+  }
+
+  const addExerciseToBuilder = (exercise: SearchedExercise) => {
+    if (builderExercises.find(e => e.name === exercise.name)) return
+    setBuilderExercises(prev => [...prev, {
+      id: crypto.randomUUID(),
+      name: exercise.name,
+      muscle: exercise.muscle,
+      equipment: exercise.equipment,
+      difficulty: exercise.difficulty,
+      instructions: exercise.instructions,
+      gifUrl: exercise.gifUrl,
+      targetSets: 3,
+    }])
+  }
+
+  const saveRoutineAsTemplate = () => {
+    if (!builderName.trim() || builderExercises.length === 0) return
+    const nextTemplate: WorkoutTemplate = {
+      id: crypto.randomUUID(),
+      name: builderName.trim(),
+      createdAt: new Date().toISOString(),
+      exercises: builderExercises.map(ex => ({
+        name: ex.name,
+        muscle: ex.muscle,
+        equipment: ex.equipment,
+        difficulty: ex.difficulty,
+        instructions: ex.instructions,
+        gifUrl: ex.gifUrl,
+        sets: Array.from({ length: ex.targetSets }, () => ({ reps: '', weight: '', unit: defaultWeightUnit })),
+      })),
+    }
+    setTemplates(prev => {
+      const next = [nextTemplate, ...prev.filter(t => t.name !== builderName.trim())].slice(0, 12)
+      persistWorkoutTemplates(next)
+      return next
+    })
+    setBuilderName('')
+    setBuilderExercises([])
+    setView('routines')
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   const timerLabel = formatElapsedTime(elapsedSeconds)
   const restTimerLabel = formatElapsedTime(restSecondsRemaining)
   const totalSetCount = activeExercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)
@@ -724,8 +807,10 @@ export default function WorkoutPage() {
     <>
       <style>{`
         .workout-wrapper { padding: 32px; max-width: 1152px; margin: 0 auto; }
-        .workout-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+        .workout-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; }
         .workout-grid { display: grid; grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr); gap: 28px; align-items: start; }
+        .workout-grid-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+        .routines-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
         .workout-primary { order: 2; }
         .workout-secondary { order: 1; }
         .workout-section { margin-bottom: 24px; }
@@ -770,34 +855,63 @@ export default function WorkoutPage() {
         }
       `}</style>
       <div className="workout-wrapper">
+        {/* ── HEADER ── */}
         <div className="workout-header">
-          <div>
-            <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>Workout Log</h1>
-            <p style={{ color: '#A0A0A0', marginTop: 4 }}>Search exercises and track your session like a real lifting app</p>
-          </div>
-          {workoutActive && (
-            <div className="flex items-center gap-3">
-              {restActive ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
-                  <span className="text-xs font-semibold" style={{ color: '#A0A0A0' }}>Rest</span>
-                  <span className="text-sm font-bold" style={{ color: '#fff' }}>{restTimerLabel}</span>
-                  <button
-                    onClick={stopRestTimer}
-                    style={{ background: 'none', border: 'none', color: '#A0A0A0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}
-                  >
-                    Stop
-                  </button>
-                </div>
-              ) : null}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {view !== 'routines' && (
               <button
-                onClick={() => void finishWorkout()}
-                disabled={savingWorkout}
-                style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                onClick={() => { setView('routines'); setSearchResults([]) }}
+                style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontFamily: 'inherit', padding: 0, flexShrink: 0 }}
               >
-                {savingWorkout ? 'Saving...' : 'Finish Workout'}
+                <ChevronDown size={16} style={{ transform: 'rotate(90deg)' }} /> Back
               </button>
+            )}
+            <div>
+              <h1 style={{ fontWeight: 700, letterSpacing: '-0.5px', color: '#fff', fontSize: 'clamp(1.5rem, 4vw, 1.875rem)' }}>
+                {view === 'routines' ? 'Workout' : view === 'building' ? (builderExercises.length > 0 || builderName ? (builderName || 'New Routine') : 'New Routine') : workoutName}
+              </h1>
+              <p style={{ color: '#A0A0A0', marginTop: 4, fontSize: 14 }}>
+                {view === 'routines' ? 'Your saved workout routines' : view === 'building' ? 'Name your routine and add exercises' : 'Log your sets — stay locked in'}
+              </p>
             </div>
-          )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            {view === 'routines' && (
+              <button
+                onClick={() => openBuilder()}
+                style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={16} /> New Routine
+              </button>
+            )}
+            {view === 'building' && (
+              <button
+                onClick={saveRoutineAsTemplate}
+                disabled={!builderName.trim() || builderExercises.length === 0}
+                style={{ backgroundColor: builderName.trim() && builderExercises.length > 0 ? '#E8002D' : '#2A2A2A', color: builderName.trim() && builderExercises.length > 0 ? '#fff' : '#606060', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: builderName.trim() && builderExercises.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+              >
+                Save Routine
+              </button>
+            )}
+            {view === 'active' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {restActive && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+                    <span style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 600 }}>Rest</span>
+                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{restTimerLabel}</span>
+                    <button onClick={stopRestTimer} style={{ background: 'none', border: 'none', color: '#A0A0A0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>Stop</button>
+                  </div>
+                )}
+                <button
+                  onClick={() => void finishWorkout()}
+                  disabled={savingWorkout}
+                  style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {savingWorkout ? 'Saving...' : 'Finish Workout'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {(searchError || workoutError) && (
@@ -806,13 +920,111 @@ export default function WorkoutPage() {
           </div>
         )}
 
-        <div className="workout-grid">
-          <div className="workout-secondary">
-            <div style={{ marginBottom: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <h2 className="text-white font-bold text-lg mb-2">{workoutActive ? 'Add Another Exercise' : 'Find Exercises'}</h2>
-              <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 16 }}>
-                Search for movements and add them into your active session.
-              </p>
+        {/* ── ROUTINES VIEW ── */}
+        {view === 'routines' && (
+          <>
+            {templates.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '80px 0' }}>
+                <Dumbbell size={48} style={{ color: '#2A2A2A', margin: '0 auto 16px' }} />
+                <p style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginBottom: 8 }}>No routines yet</p>
+                <p style={{ color: '#A0A0A0', marginBottom: 24 }}>Create your first routine to get started</p>
+                <button onClick={() => openBuilder()} style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 24px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Create Routine
+                </button>
+              </div>
+            ) : (
+              <div className="routines-grid" style={{ marginBottom: 40 }}>
+                {templates.map(template => (
+                  <div key={template.id} style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div>
+                        <p style={{ color: '#fff', fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{template.name}</p>
+                        <p style={{ color: '#A0A0A0', fontSize: 13 }}>{template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button onClick={() => openBuilder(template)} style={{ color: '#A0A0A0', background: 'none', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Edit</button>
+                        <button onClick={() => deleteTemplate(template.id)} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24, flex: 1 }}>
+                      {template.exercises.map(ex => (
+                        <div key={ex.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#E8002D', flexShrink: 0 }} />
+                          <span style={{ color: '#A0A0A0', fontSize: 13, textTransform: 'capitalize', flex: 1 }}>{ex.name}</span>
+                          <span style={{ color: '#606060', fontSize: 12 }}>{ex.sets.length} sets</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => applyTemplate(template)}
+                      style={{ width: '100%', backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    >
+                      ▶ Start Workout
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recent workouts */}
+            <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Recent Workouts</h2>
+              {loadingRecentWorkouts ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading...</p>
+              ) : recentWorkouts.length === 0 ? (
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Your saved workouts will appear here.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {recentWorkouts.map(workout => (
+                    <div key={workout.id} style={{ padding: 16, borderRadius: 12, backgroundColor: '#252525' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, cursor: 'pointer' }} onClick={() => setExpandedRecentWorkout(expandedRecentWorkout === workout.id ? null : workout.id)}>
+                        <p style={{ color: '#fff', fontWeight: 600 }}>{workout.name}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 12, color: '#A0A0A0' }}>{workout.date}</span>
+                          {expandedRecentWorkout === workout.id ? <ChevronUp size={14} style={{ color: '#A0A0A0' }} /> : <ChevronDown size={14} style={{ color: '#A0A0A0' }} />}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
+                          <Clock size={12} /> {workout.durationMinutes} min
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
+                          <Dumbbell size={12} /> {workout.exercises.length} exercises
+                        </span>
+                        <button onClick={() => repeatRecentWorkout(workout)} style={{ color: '#E8002D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}>Repeat</button>
+                        <button onClick={() => void deleteRecentWorkout(workout.id, workout.name)} disabled={deletingWorkoutId === workout.id} style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: 0 }}>
+                          {deletingWorkoutId === workout.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                      {expandedRecentWorkout === workout.id && (
+                        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {workout.exercises.map(exercise => (
+                            <div key={exercise.id} style={{ padding: 12, borderRadius: 10, backgroundColor: '#1E1E1E' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <p style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{exercise.name}</p>
+                                <span style={{ color: '#A0A0A0', fontSize: 12 }}>{exercise.setsCount} sets</span>
+                              </div>
+                              <p style={{ color: '#A0A0A0', fontSize: 12 }}>{exercise.muscle}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── BUILDING VIEW ── */}
+        {view === 'building' && (
+          <div className="workout-grid-equal">
+            {/* Left: exercise search */}
+            <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Find Exercises</h2>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Search size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
@@ -881,10 +1093,10 @@ export default function WorkoutPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => addExercise(exercise)}
-                        style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                        onClick={() => view === 'building' ? addExerciseToBuilder(exercise) : addExercise(exercise)}
+                        style={{ backgroundColor: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#2A2A2A' : 'rgba(232,0,45,0.12)', color: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#606060' : '#E8002D', border: `0.5px solid ${(view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? 'rgba(255,255,255,0.06)' : 'rgba(232,0,45,0.4)'}`, borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                       >
-                        + Add
+                        {view === 'building' && builderExercises.find(e => e.name === exercise.name) ? 'Added ✓' : '+ Add'}
                       </button>
                     </div>
                   ))}
@@ -899,205 +1111,130 @@ export default function WorkoutPage() {
               )}
             </div>
 
+            {/* ── Builder right panel: routine name + exercise list ── */}
             <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <h2 className="text-white font-bold text-lg mb-4">Recent Workouts</h2>
-              {loadingRecentWorkouts ? (
-                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Loading your recent workouts...</p>
-              ) : recentWorkouts.length === 0 ? (
-                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Your saved workouts will show up here.</p>
+              <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Your Routine</h2>
+              <input
+                placeholder="Routine name (e.g. Arms Day)"
+                value={builderName}
+                onChange={e => setBuilderName(e.target.value)}
+                style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px', width: '100%', outline: 'none', fontSize: 14, fontFamily: 'inherit', marginBottom: 16 }}
+              />
+              {builderExercises.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 24px', borderRadius: 12, border: '0.5px dashed rgba(255,255,255,0.1)', backgroundColor: '#252525' }}>
+                  <Plus size={28} style={{ color: '#2A2A2A', margin: '0 auto 10px' }} />
+                  <p style={{ color: '#A0A0A0', fontSize: 13 }}>Search and add exercises on the left</p>
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {recentWorkouts.map(workout => (
-                    <div key={workout.id} style={{ padding: 16, borderRadius: 10, backgroundColor: '#252525' }}>
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, cursor: 'pointer' }}
-                        onClick={() => setExpandedRecentWorkout(expandedRecentWorkout === workout.id ? null : workout.id)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {builderExercises.map((ex, i) => (
+                    <div key={ex.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, backgroundColor: '#252525' }}>
+                      <span style={{ color: '#E8002D', fontWeight: 700, fontSize: 13, width: 18, flexShrink: 0 }}>{i + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ color: '#fff', fontWeight: 600, fontSize: 13, textTransform: 'capitalize' }}>{ex.name}</p>
+                        <p style={{ color: '#A0A0A0', fontSize: 12, textTransform: 'capitalize', marginTop: 1 }}>{ex.muscle}</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <button
+                          onClick={() => setBuilderExercises(prev => prev.map((e, idx) => idx === i ? { ...e, targetSets: Math.max(1, e.targetSets - 1) } : e))}
+                          style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontFamily: 'inherit' }}
+                        >−</button>
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, minWidth: 16, textAlign: 'center' }}>{ex.targetSets}</span>
+                        <button
+                          onClick={() => setBuilderExercises(prev => prev.map((e, idx) => idx === i ? { ...e, targetSets: e.targetSets + 1 } : e))}
+                          style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontFamily: 'inherit' }}
+                        >+</button>
+                        <span style={{ color: '#606060', fontSize: 12 }}>sets</span>
+                      </div>
+                      <button
+                        onClick={() => setBuilderExercises(prev => prev.filter((_, idx) => idx !== i))}
+                        style={{ color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center' }}
                       >
-                        <p style={{ color: '#fff', fontWeight: 600 }}>{workout.name}</p>
-                        <div className="flex items-center gap-2">
-                          <span style={{ fontSize: 12, color: '#A0A0A0' }}>{workout.date}</span>
-                          {expandedRecentWorkout === workout.id ? <ChevronUp size={14} style={{ color: '#A0A0A0' }} /> : <ChevronDown size={14} style={{ color: '#A0A0A0' }} />}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
-                          <Clock size={12} /> {workout.durationMinutes} min
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A0A0A0' }}>
-                          <Dumbbell size={12} /> {workout.exercises.length} exercises
-                        </span>
-                        <button
-                          onClick={() => repeatRecentWorkout(workout)}
-                          style={{
-                            color: '#E8002D',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            fontFamily: 'inherit',
-                            padding: 0,
-                          }}
-                        >
-                          Repeat
-                        </button>
-                        <button
-                          onClick={() => void deleteRecentWorkout(workout.id, workout.name)}
-                          disabled={deletingWorkoutId === workout.id}
-                          style={{
-                            color: deletingWorkoutId === workout.id ? '#606060' : '#A0A0A0',
-                            background: 'none',
-                            border: 'none',
-                            cursor: deletingWorkoutId === workout.id ? 'not-allowed' : 'pointer',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            fontFamily: 'inherit',
-                            padding: 0,
-                          }}
-                        >
-                          {deletingWorkoutId === workout.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </div>
-                      {expandedRecentWorkout === workout.id ? (
-                        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          {workout.exercises.map(exercise => (
-                            <div key={exercise.id} style={{ padding: 12, borderRadius: 10, backgroundColor: '#1E1E1E' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <p style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{exercise.name}</p>
-                                <span style={{ color: '#A0A0A0', fontSize: 12 }}>{exercise.setsCount} sets</span>
-                              </div>
-                              <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 8 }}>{exercise.muscle}</p>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {exercise.sets.length === 0 ? (
-                                  <p style={{ color: '#606060', fontSize: 12 }}>No set details saved</p>
-                                ) : (
-                                  exercise.sets.map((set, index) => (
-                                    <div key={set.id} style={{ display: 'flex', justifyContent: 'space-between', color: '#A0A0A0', fontSize: 12 }}>
-                                      <span>Set {index + 1}</span>
-                                      <span>
-                                        {formatSetSummary(set.weight, set.unit, set.reps)}
-                                      </span>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginTop: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-white font-bold text-lg">Workout Templates</h2>
-                  <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 4 }}>Save a workout layout once and reuse it later.</p>
-                </div>
-                <button
-                  onClick={saveCurrentWorkoutAsTemplate}
-                  disabled={activeExercises.length === 0}
-                  style={{
-                    backgroundColor: activeExercises.length === 0 ? '#2A2A2A' : 'rgba(232,0,45,0.12)',
-                    color: activeExercises.length === 0 ? '#606060' : '#E8002D',
-                    border: activeExercises.length === 0 ? '0.5px solid rgba(255,255,255,0.08)' : '0.5px solid rgba(232,0,45,0.4)',
-                    borderRadius: 8,
-                    padding: '8px 12px',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    cursor: activeExercises.length === 0 ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Save Current
-                </button>
-              </div>
-
-              {templates.length === 0 ? (
-                <p style={{ color: '#A0A0A0', fontSize: 14 }}>No templates yet. Start a session and save one when it feels right.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {templates.map(template => (
-                    <div key={template.id} style={{ padding: 14, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ color: '#fff', fontWeight: 600 }}>{template.name}</p>
-                          <p style={{ color: '#A0A0A0', fontSize: 12, marginTop: 4 }}>
-                            {template.exercises.length} exercises · {template.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)} sets
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => applyTemplate(template)}
-                            style={{
-                              color: '#E8002D',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              fontFamily: 'inherit',
-                              padding: 0,
-                            }}
-                          >
-                            Use
-                          </button>
-                          <button
-                            onClick={() => deleteTemplate(template.id)}
-                            style={{
-                              color: '#A0A0A0',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              fontFamily: 'inherit',
-                              padding: 0,
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
+                        <X size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
+        )}
 
-          <div className="workout-primary">
-            <div className="session-shell">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <input
-                    value={workoutName}
-                    onChange={e => setWorkoutName(e.target.value)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: 26,
-                      fontWeight: 800,
-                      outline: 'none',
-                      padding: 0,
-                      width: '100%',
-                      letterSpacing: '-0.03em',
-                    }}
-                  />
-                  <p className="text-sm mt-1" style={{ color: '#A0A0A0' }}>
-                    {activeExercises.length} exercises in this session
-                  </p>
+        {/* ── ACTIVE VIEW ── */}
+        {view === 'active' && (
+          <div className="workout-grid">
+            <div className="workout-secondary">
+              {/* Search to add more exercises mid-workout */}
+              <div style={{ marginBottom: 24, borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Add Another Exercise</h2>
+                <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 16 }}>Search and add more movements to your session.</p>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Search size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search exercises"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && void searchExercises()}
+                      style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '11px 14px 11px 38px', width: '100%', outline: 'none', fontSize: 14, fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => void searchExercises()}
+                    disabled={searching}
+                    style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+                  >
+                    {searching ? '...' : 'Search'}
+                  </button>
                 </div>
-                <div className="mini-meta">
-                  {workoutActive ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#E8002D' }} />
-                      <span className="text-xs font-semibold" style={{ color: '#E8002D' }}>{timerLabel}</span>
+                {searchResults.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                    {searchResults.map(exercise => (
+                      <div key={exercise.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ color: '#fff', fontWeight: 600, fontSize: 13, textTransform: 'capitalize' }}>{exercise.name}</p>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
+                            <span style={{ color: '#A0A0A0', fontSize: 12, textTransform: 'capitalize' }}>{exercise.muscle}</span>
+                            <span style={{ color: '#3A3A3A' }}>·</span>
+                            <span style={{ color: difficultyColor[exercise.difficulty] || '#A0A0A0', fontSize: 12, textTransform: 'capitalize' }}>{exercise.difficulty}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => addExercise(exercise)}
+                          style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', border: '0.5px solid rgba(232,0,45,0.4)', borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}
+                        >
+                          + Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {searchResults.length === 0 && !searching && (
+                  <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                    <Dumbbell size={28} style={{ color: '#2A2A2A', margin: '0 auto 10px' }} />
+                    <p style={{ color: '#A0A0A0', fontSize: 13 }}>Search to add exercises</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="workout-primary">
+              <div className="session-shell">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <div>
+                    <input
+                      value={workoutName}
+                      onChange={e => setWorkoutName(e.target.value)}
+                      style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, fontWeight: 800, outline: 'none', padding: 0, width: '100%', letterSpacing: '-0.03em', fontFamily: 'inherit' }}
+                    />
+                    <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 4 }}>{activeExercises.length} exercises in this session</p>
+                  </div>
+                  <div className="mini-meta">
+                    {workoutActive ? (
+                      <>
+                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#E8002D' }} />
+                        <span className="text-xs font-semibold" style={{ color: '#E8002D' }}>{timerLabel}</span>
                     </>
                   ) : (
                     <span className="text-xs font-semibold">Ready</span>
@@ -1346,6 +1483,7 @@ export default function WorkoutPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </>
   )

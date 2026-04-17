@@ -278,7 +278,9 @@ export default function DashboardPage() {
               Good morning, {firstName} 👋
             </h1>
             <p style={{ color: '#A0A0A0', marginTop: 4 }}>
-              Your dashboard is showing live goals, workouts, food logs, and partner status.
+              {partnerProfile
+                ? `Shared fitness dashboard — you & ${partnerName}`
+                : 'Your personal fitness dashboard'}
             </p>
           </div>
           {partnerId && user && partnerProfile ? (
@@ -290,6 +292,50 @@ export default function DashboardPage() {
           ) : null}
         </div>
 
+        {/* ── Partnership identity banner ── */}
+        {!loadingData && partnerProfile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 28, borderRadius: 14, overflow: 'hidden', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+            {/* Your side */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', backgroundColor: '#1A1A1A' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#2A2A2A', border: '2px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                {getInitials(profile?.display_name || profile?.email || 'Me')}
+              </div>
+              <div>
+                <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{firstName}</p>
+                <p style={{ color: '#A0A0A0', fontSize: 12 }}>
+                  {workedOutToday ? '✓ Worked out today' : 'No workout yet'}
+                </p>
+              </div>
+            </div>
+            {/* Center divider */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 20px', backgroundColor: '#161616', alignSelf: 'stretch', justifyContent: 'center', gap: 4 }}>
+              <span style={{ fontSize: 18 }}>❤️</span>
+              <span style={{ color: '#4ade80', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' }}>CONNECTED</span>
+            </div>
+            {/* Partner side */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 20px', backgroundColor: '#1A1A1A' }}>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ color: '#E8002D', fontWeight: 700, fontSize: 14 }}>{partnerName}</p>
+                <p style={{ color: '#A0A0A0', fontSize: 12 }}>
+                  {partnerWorkedOutToday ? '✓ Worked out today' : 'No workout yet'}
+                </p>
+              </div>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#E8002D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                {partnerInitials}
+              </div>
+            </div>
+          </div>
+        )}
+        {!loadingData && !partnerProfile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28, borderRadius: 14, padding: '14px 20px', backgroundColor: '#1A1A1A', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#A0A0A0', flexShrink: 0 }} />
+            <p style={{ color: '#A0A0A0', fontSize: 14 }}>No partner connected yet —</p>
+            <Link href="/partner" style={{ color: '#E8002D', fontSize: 14, fontWeight: 600 }}>invite your partner</Link>
+            <p style={{ color: '#A0A0A0', fontSize: 14 }}>to unlock shared stats, head-to-head charts, and nudges.</p>
+          </div>
+        )}
+
+        <p style={{ color: '#606060', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Your Stats</p>
         <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <StatCard
             label="Workout Minutes"
@@ -333,12 +379,13 @@ export default function DashboardPage() {
           />
         </div>
 
+        <p style={{ color: '#606060', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Your Check-In</p>
         <div className="charts-grid" style={{ gridTemplateColumns: '1.2fr 0.8fr', marginBottom: 24 }}>
           <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
                 <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Today&apos;s Check-In</h2>
-                <p style={{ color: '#A0A0A0', fontSize: 14 }}>The three signals that matter most today.</p>
+                <p style={{ color: '#A0A0A0', fontSize: 14 }}>Your three signals for today.</p>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <p style={{ color: '#fff', fontWeight: 800, fontSize: 22 }}>{todayCaloriesPercent}%</p>
@@ -383,6 +430,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <p style={{ color: '#606060', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+          {partnerProfile ? `Joint Activity — You & ${partnerFirstName}` : 'Your Activity'}
+        </p>
         <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
             <h2 style={{ color: '#fff', fontWeight: 600, fontSize: '1.125rem', marginBottom: 4 }}>Weekly Workout Minutes</h2>
