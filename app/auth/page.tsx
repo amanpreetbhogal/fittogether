@@ -115,39 +115,39 @@ export default function AuthPage() {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center" style={{ padding: 32 }}>
-        <div className="w-full max-w-md">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <div style={{ width: '100%', maxWidth: 420 }}>
           {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-10 lg:hidden">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#E8002D' }}>
-              <span className="text-white font-black text-sm">FT</span>
+          <div className="lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 40 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8002D' }}>
+              <span style={{ color: '#fff', fontWeight: 900, fontSize: 14 }}>FT</span>
             </div>
-            <span className="text-white font-bold text-lg">FitTogether</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>FitTogether</span>
           </div>
 
-          <h2 className="text-3xl font-black text-white mb-2">
+          <h2 style={{ fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 8, letterSpacing: '-0.5px' }}>
             {mode === 'login' ? 'Welcome back' : 'Create account'}
           </h2>
-          <p className="mb-8" style={{ color: '#A0A0A0' }}>
-            {mode === 'login' ? "Sign in to your account" : "Start your journey with your partner"}
+          <p style={{ color: '#A0A0A0', marginBottom: 36, fontSize: 15 }}>
+            {mode === 'login' ? 'Sign in to your account' : 'Start your journey with your partner'}
           </p>
 
           {errorMessage && (
-            <div style={{ marginBottom: 16, backgroundColor: 'rgba(232,0,45,0.12)', border: '0.5px solid rgba(232,0,45,0.4)', color: '#ffffff', borderRadius: 10, padding: 12, fontSize: 13 }}>
+            <div style={{ marginBottom: 20, backgroundColor: 'rgba(232,0,45,0.12)', border: '0.5px solid rgba(232,0,45,0.4)', color: '#ffffff', borderRadius: 10, padding: '12px 14px', fontSize: 13 }}>
               {errorMessage}
             </div>
           )}
 
           {successMessage && (
-            <div style={{ marginBottom: 16, backgroundColor: 'rgba(74,222,128,0.12)', border: '0.5px solid rgba(74,222,128,0.35)', color: '#ffffff', borderRadius: 10, padding: 12, fontSize: 13 }}>
+            <div style={{ marginBottom: 20, backgroundColor: 'rgba(74,222,128,0.12)', border: '0.5px solid rgba(74,222,128,0.35)', color: '#ffffff', borderRadius: 10, padding: '12px 14px', fontSize: 13 }}>
               {successMessage}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {mode === 'signup' && (
-              <div className="relative">
-                <User size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+              <div style={{ position: 'relative' }}>
+                <User size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
                   placeholder="Full name"
@@ -155,21 +155,23 @@ export default function AuthPage() {
                   onChange={e => setName(e.target.value)}
                   style={{
                     backgroundColor: '#1E1E1E',
-                    border: '0.5px solid rgba(255,255,255,0.08)',
+                    border: '0.5px solid rgba(255,255,255,0.1)',
                     color: '#ffffff',
-                    borderRadius: '10px',
-                    padding: '14px 14px 14px 40px',
+                    borderRadius: 12,
+                    padding: '16px 16px 16px 44px',
                     width: '100%',
                     outline: 'none',
-                    fontSize: '15px',
+                    fontSize: 15,
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
                   }}
                   required
                 />
               </div>
             )}
 
-            <div className="relative">
-              <Mail size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="email"
                 placeholder="Email address"
@@ -177,20 +179,22 @@ export default function AuthPage() {
                 onChange={e => setEmail(e.target.value)}
                 style={{
                   backgroundColor: '#1E1E1E',
-                  border: '0.5px solid rgba(255,255,255,0.08)',
+                  border: '0.5px solid rgba(255,255,255,0.1)',
                   color: '#ffffff',
-                  borderRadius: '10px',
-                  padding: '14px 14px 14px 40px',
+                  borderRadius: 12,
+                  padding: '16px 16px 16px 44px',
                   width: '100%',
                   outline: 'none',
-                  fontSize: '15px',
+                  fontSize: 15,
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
                 }}
                 required
               />
             </div>
 
-            <div className="relative">
-              <Lock size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ color: '#A0A0A0', position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Password"
@@ -198,20 +202,22 @@ export default function AuthPage() {
                 onChange={e => setPassword(e.target.value)}
                 style={{
                   backgroundColor: '#1E1E1E',
-                  border: '0.5px solid rgba(255,255,255,0.08)',
+                  border: '0.5px solid rgba(255,255,255,0.1)',
                   color: '#ffffff',
-                  borderRadius: '10px',
-                  padding: '14px 40px 14px 40px',
+                  borderRadius: 12,
+                  padding: '16px 44px 16px 44px',
                   width: '100%',
                   outline: 'none',
-                  fontSize: '15px',
+                  fontSize: 15,
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
                 }}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: '#A0A0A0', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -224,27 +230,28 @@ export default function AuthPage() {
                 backgroundColor: '#E8002D',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '10px',
-                padding: '14px',
+                borderRadius: 12,
+                padding: '16px',
                 width: '100%',
-                fontSize: '15px',
-                fontWeight: '700',
+                fontSize: 16,
+                fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.7 : 1,
-                marginTop: '8px',
+                marginTop: 6,
+                fontFamily: 'inherit',
               }}
             >
               {loading ? (mode === 'login' ? 'Signing in...' : 'Creating account...') : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
-          <div className="mt-6 flex items-center gap-4">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 28 }}>
             <div style={{ flex: 1, height: 1, backgroundColor: '#2A2A2A' }} />
-            <span className="text-sm" style={{ color: '#A0A0A0' }}>or</span>
+            <span style={{ color: '#A0A0A0', fontSize: 13 }}>or</span>
             <div style={{ flex: 1, height: 1, backgroundColor: '#2A2A2A' }} />
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
             {['Google and Apple login coming soon', 'Supabase email auth is active now'].map((label) => (
               <button
                 key={label}
@@ -252,15 +259,15 @@ export default function AuthPage() {
                 disabled
                 style={{
                   backgroundColor: '#1E1E1E',
-                  color: '#A0A0A0',
-                  border: '0.5px solid rgba(255,255,255,0.08)',
-                  borderRadius: '10px',
-                  padding: '13px',
+                  color: '#606060',
+                  border: '0.5px solid rgba(255,255,255,0.06)',
+                  borderRadius: 12,
+                  padding: '14px',
                   width: '100%',
-                  fontSize: '14px',
-                  fontWeight: '500',
+                  fontSize: 14,
+                  fontWeight: 500,
                   cursor: 'not-allowed',
-                  opacity: 0.7,
+                  fontFamily: 'inherit',
                 }}
               >
                 {label}
@@ -268,12 +275,12 @@ export default function AuthPage() {
             ))}
           </div>
 
-          <p className="mt-8 text-center text-sm" style={{ color: '#A0A0A0' }}>
-            {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
+          <p style={{ marginTop: 32, textAlign: 'center', fontSize: 14, color: '#A0A0A0' }}>
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
             <button
               type="button"
               onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-              style={{ color: '#E8002D', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}
+              style={{ color: '#E8002D', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}
             >
               {mode === 'login' ? 'Sign up' : 'Sign in'}
             </button>
