@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock, CalendarDays, ChevronLeft, ChevronRight, ClipboardPenLine, PlayCircle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Search, Plus, X, ChevronDown, ChevronUp, Dumbbell, Clock, CalendarDays, ClipboardPenLine, PlayCircle } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -112,6 +112,7 @@ const WORKOUT_TEMPLATES_KEY = 'fittogether.workoutTemplates'
 
 export default function WorkoutPage() {
   const { user, profile, loading: authLoading } = useAuth()
+  const workoutDateInputRef = useRef<HTMLInputElement | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchedExercise[]>([])
   const [searching, setSearching] = useState(false)
@@ -877,6 +878,22 @@ export default function WorkoutPage() {
         .workout-grid { display: grid; grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr); gap: 28px; align-items: start; }
         .workout-grid-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
         .routines-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .date-bar { margin-bottom: 24px; border-radius: 16px; padding: 16px 18px; background-color: #1E1E1E; border: 0.5px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .date-bar-label { display: flex; align-items: center; gap: 10px; }
+        .date-bar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .date-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 12px; background-color: #252525; border: 0.5px solid rgba(255,255,255,0.08); color: #fff; font-size: 14px; font-weight: 600; font-family: inherit; }
+        .date-chip-btn { cursor: pointer; }
+        .date-chip-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+        .date-input-shell { position: relative; }
+        .date-input-native { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .builder-results { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
+        .builder-result-card { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #262626 0%, #222222 100%); border: 0.5px solid rgba(255,255,255,0.08); }
+        .builder-result-thumb { width: 84px; height: 84px; border-radius: 14px; overflow: hidden; background-color: #181818; border: 0.5px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+        .builder-result-copy { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .builder-result-title { color: #fff; font-weight: 700; font-size: 17px; line-height: 1.3; }
+        .builder-result-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .builder-meta-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; background-color: #1A1A1A; border: 0.5px solid rgba(255,255,255,0.06); color: #B7B7B7; font-size: 12px; text-transform: capitalize; }
+        .builder-result-add { min-width: 92px; min-height: 42px; border-radius: 10px; padding: 0 14px; font-weight: 700; font-size: 14px; white-space: nowrap; font-family: inherit; }
         .workout-primary { order: 2; }
         .workout-secondary { order: 1; }
         .workout-section { margin-bottom: 24px; }
@@ -911,6 +928,14 @@ export default function WorkoutPage() {
           .workout-wrapper { padding: 72px 16px 24px; }
           .workout-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
           .workout-grid { grid-template-columns: 1fr; gap: 24px; }
+          .workout-grid-equal { grid-template-columns: 1fr; gap: 24px; }
+          .date-bar { padding: 14px; }
+          .date-bar-actions { width: 100%; }
+          .date-chip { width: 100%; justify-content: center; }
+          .date-input-shell { flex: 1 1 100%; }
+          .builder-result-card { grid-template-columns: 72px minmax(0, 1fr); align-items: start; }
+          .builder-result-thumb { width: 72px; height: 72px; }
+          .builder-result-add { grid-column: 1 / -1; width: 100%; }
           .workout-primary { order: 1; }
           .workout-secondary { order: 2; }
           .session-shell { position: static; }
@@ -1006,29 +1031,45 @@ export default function WorkoutPage() {
           </div>
         )}
 
-        <div style={{ marginBottom: 24, borderRadius: 16, padding: 16, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="date-bar">
+          <div className="date-bar-label">
             <CalendarDays size={18} style={{ color: '#E8002D' }} />
             <div>
               <p style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Workout Date</p>
               <p style={{ color: '#A0A0A0', fontSize: 12 }}>{dateLabel}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))} style={dateNavButtonStyle}>
-              <ChevronLeft size={14} />
-              Prev
+          <div className="date-bar-actions">
+            <button
+              onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
+              className="date-chip date-chip-btn"
+              style={{ border: selectedDate === new Date().toISOString().slice(0, 10) ? '0.5px solid rgba(232,0,45,0.4)' : '0.5px solid rgba(255,255,255,0.08)', color: selectedDate === new Date().toISOString().slice(0, 10) ? '#E8002D' : '#fff' }}
+            >
+              Today
             </button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={event => setSelectedDate(event.target.value)}
-              style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', colorScheme: 'dark' }}
-            />
-            <button onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))} style={dateNavButtonStyle}>
-              Next
-              <ChevronRight size={14} />
-            </button>
+            <div className="date-input-shell">
+              <button
+                type="button"
+                className="date-chip date-chip-btn"
+                onClick={() => workoutDateInputRef.current?.showPicker?.()}
+                style={{ minWidth: 190, justifyContent: 'space-between' }}
+              >
+                <span>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}</span>
+                <CalendarDays size={16} style={{ color: '#A0A0A0' }} />
+              </button>
+              <input
+                ref={workoutDateInputRef}
+                type="date"
+                value={selectedDate}
+                onChange={event => setSelectedDate(event.target.value)}
+                className="date-input-native"
+                aria-label="Select workout date"
+              />
+            </div>
           </div>
         </div>
 
@@ -1203,25 +1244,14 @@ export default function WorkoutPage() {
               </div>
 
               {searchResults.length > 0 && (
-                <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+                <div className="builder-results">
                   {searchResults.map(exercise => (
                     <div
                       key={exercise.id}
-                      className="flex items-center justify-between p-4 rounded-xl gap-3"
-                      style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}
+                      className="builder-result-card"
                     >
                       {exercise.gifUrl ? (
-                        <div
-                          style={{
-                            width: 72,
-                            height: 72,
-                            borderRadius: 10,
-                            overflow: 'hidden',
-                            backgroundColor: '#1E1E1E',
-                            border: '0.5px solid rgba(255,255,255,0.08)',
-                            flexShrink: 0,
-                          }}
-                        >
+                        <div className="builder-result-thumb">
                           <img
                             src={exercise.gifUrl}
                             alt={exercise.name}
@@ -1229,19 +1259,20 @@ export default function WorkoutPage() {
                           />
                         </div>
                       ) : null}
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="text-white font-semibold text-sm capitalize">{exercise.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-xs capitalize" style={{ color: '#A0A0A0' }}>{exercise.muscle}</span>
-                          <span style={{ color: '#2A2A2A' }}>·</span>
-                          <span className="text-xs capitalize" style={{ color: '#A0A0A0' }}>{exercise.equipment}</span>
-                          <span style={{ color: '#2A2A2A' }}>·</span>
-                          <span className="text-xs capitalize" style={{ color: difficultyColor[exercise.difficulty] || '#A0A0A0' }}>{exercise.difficulty}</span>
+                      <div className="builder-result-copy">
+                        <p className="builder-result-title">{exercise.name}</p>
+                        <div className="builder-result-meta">
+                          <span className="builder-meta-pill">{exercise.muscle}</span>
+                          <span className="builder-meta-pill">{exercise.equipment}</span>
+                          <span className="builder-meta-pill" style={{ color: difficultyColor[exercise.difficulty] || '#A0A0A0' }}>
+                            {exercise.difficulty}
+                          </span>
                         </div>
                       </div>
                       <button
                         onClick={() => view === 'building' ? addExerciseToBuilder(exercise) : addExercise(exercise)}
-                        style={{ backgroundColor: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#2A2A2A' : 'rgba(232,0,45,0.12)', color: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#606060' : '#E8002D', border: `0.5px solid ${(view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? 'rgba(255,255,255,0.06)' : 'rgba(232,0,45,0.4)'}`, borderRadius: 6, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                        className="builder-result-add"
+                        style={{ backgroundColor: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#2A2A2A' : 'rgba(232,0,45,0.12)', color: (view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? '#606060' : '#E8002D', border: `0.5px solid ${(view === 'building' && builderExercises.find(e => e.name === exercise.name)) ? 'rgba(255,255,255,0.06)' : 'rgba(232,0,45,0.4)'}`, cursor: 'pointer' }}
                       >
                         {view === 'building' && builderExercises.find(e => e.name === exercise.name) ? 'Added ✓' : '+ Add'}
                       </button>
@@ -1723,21 +1754,6 @@ function persistWorkoutTemplates(templates: WorkoutTemplate[]) {
 
   window.localStorage.setItem(WORKOUT_TEMPLATES_KEY, JSON.stringify(templates))
 }
-
-const dateNavButtonStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  backgroundColor: '#252525',
-  border: '0.5px solid rgba(255,255,255,0.08)',
-  color: '#fff',
-  borderRadius: 10,
-  padding: '10px 12px',
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-} as const
 
 function shiftDateString(dateString: string, days: number) {
   const date = new Date(`${dateString}T12:00:00`)
