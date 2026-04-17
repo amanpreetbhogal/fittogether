@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Search, Flame, Star, X, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, Flame, Star, X, CalendarDays } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import type { Database } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -69,6 +69,7 @@ const FAVORITE_FOODS_KEY = 'fittogether.favoriteFoods'
 
 export default function FoodPage() {
   const { user, profile, loading: authLoading } = useAuth()
+  const foodDateInputRef = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -360,6 +361,55 @@ export default function FoodPage() {
           grid-template-columns: 1fr 1fr;
           gap: 32px;
         }
+        .date-bar {
+          margin-bottom: 24px;
+          border-radius: 16px;
+          padding: 16px 18px;
+          background-color: #1E1E1E;
+          border: 0.5px solid rgba(255,255,255,0.08);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .date-bar-label {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .date-bar-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .date-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 42px;
+          padding: 0 14px;
+          border-radius: 12px;
+          background-color: #252525;
+          border: 0.5px solid rgba(255,255,255,0.08);
+          color: #fff;
+          font-size: 14px;
+          font-weight: 600;
+          font-family: inherit;
+        }
+        .date-chip-btn {
+          cursor: pointer;
+        }
+        .date-input-shell {
+          position: relative;
+        }
+        .date-input-native {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          cursor: pointer;
+        }
         .food-macro-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -373,6 +423,19 @@ export default function FoodPage() {
             grid-template-columns: 1fr;
             gap: 24px;
           }
+          .date-bar {
+            padding: 14px;
+          }
+          .date-bar-actions {
+            width: 100%;
+          }
+          .date-chip {
+            width: 100%;
+            justify-content: center;
+          }
+          .date-input-shell {
+            flex: 1 1 100%;
+          }
           .food-macro-grid {
             grid-template-columns: repeat(2, 1fr);
           }
@@ -384,35 +447,50 @@ export default function FoodPage() {
           <p style={{ color: '#A0A0A0' }} className="mt-1">Track your nutrition for any day, not just today</p>
         </div>
 
-        <div style={{ marginBottom: 24, borderRadius: 16, padding: 16, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="date-bar">
+          <div className="date-bar-label">
             <CalendarDays size={18} style={{ color: '#E8002D' }} />
             <div>
               <p style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Log Date</p>
               <p style={{ color: '#A0A0A0', fontSize: 12 }}>{dateLabel}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div className="date-bar-actions">
             <button
-              onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))}
-              style={dateNavButtonStyle}
+              onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
+              className="date-chip date-chip-btn"
+              style={{
+                border: selectedDate === new Date().toISOString().slice(0, 10)
+                  ? '0.5px solid rgba(232,0,45,0.4)'
+                  : '0.5px solid rgba(255,255,255,0.08)',
+                color: selectedDate === new Date().toISOString().slice(0, 10) ? '#E8002D' : '#fff',
+              }}
             >
-              <ChevronLeft size={14} />
-              Prev
+              Today
             </button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={event => setSelectedDate(event.target.value)}
-              style={{ backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', colorScheme: 'dark' }}
-            />
-            <button
-              onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))}
-              style={dateNavButtonStyle}
-            >
-              Next
-              <ChevronRight size={14} />
-            </button>
+            <div className="date-input-shell">
+              <button
+                type="button"
+                className="date-chip date-chip-btn"
+                onClick={() => foodDateInputRef.current?.showPicker?.()}
+                style={{ minWidth: 190, justifyContent: 'space-between' }}
+              >
+                <span>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}</span>
+                <CalendarDays size={16} style={{ color: '#A0A0A0' }} />
+              </button>
+              <input
+                ref={foodDateInputRef}
+                type="date"
+                value={selectedDate}
+                onChange={event => setSelectedDate(event.target.value)}
+                className="date-input-native"
+                aria-label="Select food log date"
+              />
+            </div>
           </div>
         </div>
 
@@ -962,21 +1040,6 @@ function persistFavoriteShortcuts(shortcuts: FoodShortcut[]) {
   }
 
   window.localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(shortcuts))
-}
-
-const dateNavButtonStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  backgroundColor: '#252525',
-  border: '0.5px solid rgba(255,255,255,0.08)',
-  color: '#fff',
-  borderRadius: 10,
-  padding: '10px 12px',
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
 }
 
 function shiftDateString(dateString: string, days: number) {

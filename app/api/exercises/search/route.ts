@@ -33,7 +33,9 @@ type NormalizedExercise = {
   gifUrl: string
 }
 
-const RAPID_API_HOST = process.env.EXERCISEDB_RAPIDAPI_HOST
+const RAPID_API_HOST =
+  process.env.EXERCISEDB_RAPIDAPI_HOST ||
+  'edb-with-videos-and-images-by-ascendapi.p.rapidapi.com'
 const RAPID_API_KEY = process.env.EXERCISEDB_RAPIDAPI_KEY
 const SEARCH_BASE_URL = 'https://edb-with-videos-and-images-by-ascendapi.p.rapidapi.com'
 
@@ -46,9 +48,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [] })
   }
 
-  if (!RAPID_API_HOST || !RAPID_API_KEY) {
+  if (!RAPID_API_KEY) {
     return NextResponse.json(
-      { error: 'ExerciseDB API credentials are missing.' },
+      { error: 'ExerciseDB API key is missing on this deployment.' },
       { status: 500 }
     )
   }
