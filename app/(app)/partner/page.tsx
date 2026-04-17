@@ -60,6 +60,7 @@ export default function PartnerPage() {
   const [partnerProfile, setPartnerProfile] = useState<ProfileRow | null>(null)
   const [incomingInvites, setIncomingInvites] = useState<PartnershipInviteRow[]>([])
   const [outgoingInvites, setOutgoingInvites] = useState<PartnershipInviteRow[]>([])
+  const [senderProfiles, setSenderProfiles] = useState<Record<string, ProfileRow>>({})
   const [partnerWorkouts, setPartnerWorkouts] = useState<WorkoutRow[]>([])
   const [yourWorkouts, setYourWorkouts] = useState<WorkoutRow[]>([])
   const [sharedGoals, setSharedGoals] = useState<GoalRow[]>([])
@@ -111,12 +112,12 @@ export default function PartnerPage() {
     const normalizedEmail = inviteEmail.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      setErrorMessage('Enter your partner’s email to send an invite.')
+      setErrorMessage("Enter your partner's email to send an invite.")
       return
     }
 
     if (normalizedEmail === currentUserProfile.email.toLowerCase()) {
-      setErrorMessage('You can’t invite your own email.')
+      setErrorMessage("You can't invite your own email.")
       return
     }
 
@@ -265,8 +266,23 @@ export default function PartnerPage() {
     }
 
     const normalizedEmail = profile.email.toLowerCase()
-    setIncomingInvites(invites.filter(invite => invite.recipient_email.toLowerCase() === normalizedEmail))
+    const incomingList = invites.filter(invite => invite.recipient_email.toLowerCase() === normalizedEmail)
+    setIncomingInvites(incomingList)
     setOutgoingInvites(invites.filter(invite => invite.sender_id === user.id))
+
+    // Fetch sender profiles so we can show who the invite is from
+    const senderIds = incomingList.map(i => i.sender_id)
+    if (senderIds.length > 0) {
+      const { data: senderData } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', senderIds)
+      if (senderData) {
+        const lookup: Record<string, ProfileRow> = {}
+        senderData.forEach(p => { lookup[p.id] = p })
+        setSenderProfiles(lookup)
+      }
+    }
 
     const { data: partnerships, error: partnershipsError } = await supabase
       .from('partnerships')
@@ -494,30 +510,42 @@ export default function PartnerPage() {
           <>
             <div className="invite-grid">
               <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,0,45,0.12)', color: '#E8002D', flexShrink: 0 }}>
                     <UserPlus size={20} />
                   </div>
                   <div>
-                    <h2 className="text-white font-bold text-lg">Invite Your Partner</h2>
+                    <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 17, marginBottom: 2 }}>Invite Your Partner</h2>
                     <p style={{ color: '#A0A0A0', fontSize: 13 }}>Send an email invite to connect your accounts</p>
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label className="block text-xs mb-1" style={{ color: '#A0A0A0' }}>Partner Email</label>
+                    <label style={{ display: 'block', color: '#A0A0A0', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Partner Email</label>
                     <input
                       type="email"
                       placeholder="partner@example.com"
                       value={inviteEmail}
                       onChange={event => setInviteEmail(event.target.value)}
+                      style={{
+                        backgroundColor: '#252525',
+                        border: '0.5px solid rgba(255,255,255,0.1)',
+                        color: '#fff',
+                        borderRadius: 10,
+                        padding: '12px 14px',
+                        width: '100%',
+                        outline: 'none',
+                        fontSize: 14,
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box',
+                      }}
                     />
                   </div>
                   <button
                     onClick={() => void sendInvite()}
                     disabled={submittingInvite}
-                    style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                    style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 20px', fontWeight: 600, fontSize: 14, cursor: submittingInvite ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
                   >
                     {submittingInvite ? 'Sending...' : 'Send Invite'}
                   </button>
@@ -525,17 +553,17 @@ export default function PartnerPage() {
               </div>
 
               <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)', color: '#fff', flexShrink: 0 }}>
                     <Users size={20} />
                   </div>
                   <div>
-                    <h2 className="text-white font-bold text-lg">No Partner Yet</h2>
+                    <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 17, marginBottom: 2 }}>No Partner Yet</h2>
                     <p style={{ color: '#A0A0A0', fontSize: 13 }}>Connect accounts to unlock nudges and comparisons</p>
                   </div>
                 </div>
-                <ul style={{ color: '#A0A0A0', fontSize: 14, lineHeight: 1.8, paddingLeft: 18 }}>
-                  <li>View each other’s workouts and food logs</li>
+                <ul style={{ color: '#A0A0A0', fontSize: 14, lineHeight: 2, paddingLeft: 18, margin: 0 }}>
+                  <li>View each other&apos;s workouts and food logs</li>
                   <li>Share accountability goals</li>
                   <li>Send motivational nudges</li>
                 </ul>
@@ -543,32 +571,40 @@ export default function PartnerPage() {
             </div>
 
             <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center gap-2 mb-5">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                 <Mail size={18} style={{ color: '#E8002D' }} />
-                <h2 className="text-white font-bold text-lg">Pending Invitations</h2>
+                <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 17 }}>Pending Invitations</h2>
               </div>
 
               {inviteCards.length === 0 ? (
                 <p style={{ color: '#A0A0A0', fontSize: 14 }}>No pending invites yet.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {inviteCards.map(invite => (
+                  {inviteCards.map(invite => {
+                    const sender = senderProfiles[invite.sender_id]
+                    const senderLabel = sender?.display_name || sender?.email || invite.sender_id
+                    return (
                     <div key={invite.id} style={{ padding: 16, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-white font-semibold text-sm">
-                            {invite.direction === 'incoming' ? 'Incoming invite' : 'Invite sent'}
-                          </p>
-                          <p style={{ color: '#A0A0A0', fontSize: 13, marginTop: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>
+                              {invite.direction === 'incoming' ? 'Incoming invite' : 'Invite sent'}
+                            </span>
+                            <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, backgroundColor: invite.direction === 'incoming' ? 'rgba(232,0,45,0.12)' : 'rgba(255,255,255,0.06)', color: invite.direction === 'incoming' ? '#E8002D' : '#A0A0A0' }}>
+                              {invite.direction === 'incoming' ? 'Needs your response' : 'Pending'}
+                            </span>
+                          </div>
+                          <p style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 4 }}>
                             {invite.direction === 'incoming'
-                              ? `Sent to ${currentUserProfile?.email}`
-                              : `Waiting for ${invite.recipient_email}`}
+                              ? `From: ${senderLabel}`
+                              : `Waiting for ${invite.recipient_email} to accept`}
                           </p>
-                          <p style={{ color: '#606060', fontSize: 12, marginTop: 6 }}>
+                          <p style={{ color: '#606060', fontSize: 12 }}>
                             {formatDateTime(invite.created_at)}
                           </p>
                         </div>
-                        <div className="flex items-center gap-8">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                           {invite.direction === 'incoming' ? (
                             <>
                               <button
@@ -598,7 +634,8 @@ export default function PartnerPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )
+                  })}
                 </div>
               )}
             </div>
@@ -627,7 +664,7 @@ export default function PartnerPage() {
               <div className="partner-stats">
                 {[
                   { label: 'This Week', value: partnerWeeklyWorkouts, icon: <Dumbbell size={16} />, unit: 'workouts' },
-                  { label: "Today’s Intake", value: partnerTodayCalories.toLocaleString(), icon: <Flame size={16} />, unit: 'kcal' },
+                  { label: "Today's Intake", value: partnerTodayCalories.toLocaleString(), icon: <Flame size={16} />, unit: 'kcal' },
                   { label: 'Shared Goals', value: sharedGoals.length, icon: <Trophy size={16} />, unit: 'goals' },
                 ].map(item => (
                   <div key={item.label} style={{ borderRadius: 10, padding: 16, textAlign: 'center', backgroundColor: '#252525' }}>
