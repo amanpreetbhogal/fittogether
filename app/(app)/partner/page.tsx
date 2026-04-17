@@ -139,6 +139,8 @@ export default function PartnerPage() {
       .from('partnership_invites')
       .insert({
         sender_id: user.id,
+        sender_email: currentUserProfile.email,
+        sender_display_name: currentUserProfile.display_name,
         recipient_email: normalizedEmail,
         status: 'pending',
       })
@@ -270,7 +272,8 @@ export default function PartnerPage() {
     setIncomingInvites(incomingList)
     setOutgoingInvites(invites.filter(invite => invite.sender_id === user.id))
 
-    // Fetch sender profiles so we can show who the invite is from
+    // Fetch sender profiles so we can show who the invite is from when older invites
+    // don't yet have sender metadata stored directly on the invite row.
     const senderIds = incomingList.map(i => i.sender_id)
     if (senderIds.length > 0) {
       const { data: senderData } = await supabase
@@ -582,7 +585,12 @@ export default function PartnerPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {inviteCards.map(invite => {
                     const sender = senderProfiles[invite.sender_id]
-                    const senderLabel = sender?.display_name || sender?.email || invite.sender_id
+                    const senderLabel =
+                      invite.sender_display_name ||
+                      invite.sender_email ||
+                      sender?.display_name ||
+                      sender?.email ||
+                      invite.sender_id
                     return (
                     <div key={invite.id} style={{ padding: 16, borderRadius: 12, backgroundColor: '#252525', border: '0.5px solid rgba(255,255,255,0.08)' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>

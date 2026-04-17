@@ -65,6 +65,8 @@ export type Database = {
         Row: {
           id: string
           sender_id: string
+          sender_email: string | null
+          sender_display_name: string | null
           recipient_email: string
           status: Database["public"]["Enums"]["partnership_status"]
           created_at: string
@@ -73,6 +75,8 @@ export type Database = {
         Insert: {
           id?: string
           sender_id: string
+          sender_email?: string | null
+          sender_display_name?: string | null
           recipient_email: string
           status?: Database["public"]["Enums"]["partnership_status"]
           created_at?: string
@@ -81,6 +85,8 @@ export type Database = {
         Update: {
           id?: string
           sender_id?: string
+          sender_email?: string | null
+          sender_display_name?: string | null
           recipient_email?: string
           status?: Database["public"]["Enums"]["partnership_status"]
           created_at?: string

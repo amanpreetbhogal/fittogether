@@ -53,11 +53,19 @@ create unique index if not exists partnerships_active_user_two_idx
 create table if not exists public.partnership_invites (
   id uuid primary key default gen_random_uuid(),
   sender_id uuid not null references public.profiles (id) on delete cascade,
+  sender_email text,
+  sender_display_name text,
   recipient_email text not null,
   status public.partnership_status not null default 'pending',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.partnership_invites
+  add column if not exists sender_email text;
+
+alter table public.partnership_invites
+  add column if not exists sender_display_name text;
 
 create table if not exists public.workouts (
   id uuid primary key default gen_random_uuid(),
