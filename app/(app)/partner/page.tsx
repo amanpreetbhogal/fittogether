@@ -451,11 +451,81 @@ export default function PartnerPage() {
           gap: 16px;
           margin-top: 24px;
         }
+        .comparison-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .comparison-card {
+          padding: 16px;
+          border-radius: 14px;
+          background-color: #252525;
+          border: 0.5px solid rgba(255,255,255,0.08);
+        }
+        .comparison-header {
+          display: grid;
+          grid-template-columns: minmax(92px, auto) minmax(140px, 1fr) minmax(92px, auto);
+          align-items: start;
+          gap: 16px;
+          margin-bottom: 12px;
+        }
+        .comparison-you {
+          min-width: 92px;
+        }
+        .comparison-label {
+          min-width: 0;
+          text-align: center;
+          padding-top: 2px;
+        }
+        .comparison-partner {
+          min-width: 92px;
+          text-align: right;
+        }
+        .comparison-metric-label {
+          color: #fff;
+          font-size: 15px;
+          font-weight: 600;
+          line-height: 1.35;
+        }
+        .comparison-side-label {
+          color: #A0A0A0;
+          font-size: 12px;
+          margin-bottom: 4px;
+        }
+        .comparison-side-value-you {
+          color: #fff;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1.1;
+        }
+        .comparison-side-value-partner {
+          color: #E8002D;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1.1;
+        }
+        .comparison-bar {
+          display: flex;
+          height: 12px;
+          border-radius: 999px;
+          overflow: hidden;
+          gap: 2px;
+        }
         .invite-grid {
           display: grid;
           grid-template-columns: 1.2fr 0.8fr;
           gap: 24px;
           margin-bottom: 24px;
+        }
+        @media (max-width: 1279px) {
+          .comparison-header {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .comparison-label,
+          .comparison-partner {
+            text-align: left;
+          }
         }
         @media (max-width: 1023px) {
           .partner-wrapper {
@@ -700,21 +770,33 @@ export default function PartnerPage() {
 
               <div style={{ borderRadius: 16, padding: 24, backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)' }}>
                 <h2 className="text-white font-bold text-lg mb-5">Head-to-Head</h2>
-                <div className="space-y-5">
+                <div className="comparison-list">
                   {comparisonItems.map(item => {
                     const total = Math.max(item.you + item.partner, 1)
                     const youPct = Math.round((item.you / total) * 100)
                     const partnerPct = 100 - youPct
                     return (
-                      <div key={item.label}>
-                        <div className="flex justify-between mb-2 text-sm">
-                          <span style={{ color: '#A0A0A0' }}>You: <span className="text-white font-bold">{item.you}{item.unit && ` ${item.unit}`}</span></span>
-                          <span className="text-white font-semibold">{item.label}</span>
-                          <span style={{ color: '#A0A0A0' }}>Partner: <span style={{ color: '#E8002D', fontWeight: 700 }}>{item.partner}{item.unit && ` ${item.unit}`}</span></span>
+                      <div key={item.label} className="comparison-card">
+                        <div className="comparison-header">
+                          <div className="comparison-you">
+                            <p className="comparison-side-label">You</p>
+                            <p className="comparison-side-value-you">
+                              {item.you}{item.unit && ` ${item.unit}`}
+                            </p>
+                          </div>
+                          <div className="comparison-label">
+                            <p className="comparison-metric-label">{item.label}</p>
+                          </div>
+                          <div className="comparison-partner">
+                            <p className="comparison-side-label">Partner</p>
+                            <p className="comparison-side-value-partner">
+                              {item.partner}{item.unit && ` ${item.unit}`}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                          <div style={{ width: `${youPct}%`, backgroundColor: '#ffffff', borderRadius: '4px 0 0 4px' }} />
-                          <div style={{ width: `${partnerPct}%`, backgroundColor: '#E8002D', borderRadius: '0 4px 4px 0' }} />
+                        <div className="comparison-bar">
+                          <div style={{ width: `${youPct}%`, backgroundColor: '#ffffff', borderRadius: '999px 0 0 999px' }} />
+                          <div style={{ width: `${partnerPct}%`, backgroundColor: '#E8002D', borderRadius: '0 999px 999px 0' }} />
                         </div>
                       </div>
                     )

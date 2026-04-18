@@ -410,6 +410,108 @@ export default function FoodPage() {
           opacity: 0;
           cursor: pointer;
         }
+        .serving-card {
+          margin-bottom: 18px;
+          border-radius: 16px;
+          padding: 18px;
+          background: linear-gradient(180deg, rgba(232,0,45,0.10) 0%, rgba(37,37,37,0.98) 22%);
+          border: 1px solid rgba(232,0,45,0.55);
+          box-shadow: 0 14px 32px rgba(0,0,0,0.22);
+        }
+        .serving-card-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          margin-bottom: 14px;
+        }
+        .serving-card-title {
+          color: #fff;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1.2;
+          margin-bottom: 4px;
+        }
+        .serving-card-subtitle {
+          color: #A0A0A0;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .serving-card-meal {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          background-color: rgba(255,255,255,0.06);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .serving-card-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 14px;
+          align-items: end;
+          margin-bottom: 12px;
+        }
+        .serving-card-label {
+          display: block;
+          color: #A0A0A0;
+          font-size: 12px;
+          font-weight: 700;
+          margin-bottom: 8px;
+        }
+        .serving-card-input {
+          width: 100%;
+          min-height: 48px;
+          background-color: #1A1A1A;
+          border: 0.5px solid rgba(255,255,255,0.08);
+          color: #fff;
+          border-radius: 12px;
+          padding: 0 14px;
+          outline: none;
+          font-size: 16px;
+          font-family: inherit;
+        }
+        .serving-card-calories {
+          color: #fff;
+          font-size: 22px;
+          font-weight: 800;
+          white-space: nowrap;
+          padding-bottom: 10px;
+        }
+        .serving-card-base {
+          color: #A0A0A0;
+          font-size: 12px;
+          margin-bottom: 16px;
+        }
+        .serving-card-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .serving-card-primary {
+          background-color: #E8002D;
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          padding: 10px 16px;
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+          font-family: inherit;
+        }
+        .serving-card-secondary {
+          background-color: #2A2A2A;
+          color: #A0A0A0;
+          border: 0.5px solid rgba(255,255,255,0.08);
+          border-radius: 10px;
+          padding: 10px 16px;
+          cursor: pointer;
+          font-size: 14px;
+          font-family: inherit;
+        }
         .food-macro-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -435,6 +537,22 @@ export default function FoodPage() {
           }
           .date-input-shell {
             flex: 1 1 100%;
+          }
+          .serving-card {
+            padding: 16px;
+          }
+          .serving-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            margin-bottom: 12px;
+          }
+          .serving-card-grid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .serving-card-calories {
+            padding-bottom: 0;
+            font-size: 20px;
           }
           .food-macro-grid {
             grid-template-columns: repeat(2, 1fr);
@@ -613,6 +731,57 @@ export default function FoodPage() {
                 </button>
               </div>
 
+              {addingFood && (
+                <div className="serving-card">
+                  <div className="serving-card-header">
+                    <div>
+                      <p className="serving-card-title">{addingFood.name}</p>
+                      {addingFood.brand && (
+                        <p className="serving-card-subtitle">{addingFood.brand}</p>
+                      )}
+                    </div>
+                    <div className="serving-card-meal">Adding to {selectedMeal}</div>
+                  </div>
+
+                  <div className="serving-card-grid">
+                    <div>
+                      <label className="serving-card-label">Number of servings</label>
+                      <input
+                        type="number"
+                        value={servingSize}
+                        onChange={e => setServingSize(e.target.value)}
+                        min="0.25"
+                        step="0.25"
+                        className="serving-card-input"
+                      />
+                    </div>
+                    <div className="serving-card-calories">
+                      ~{Math.round(addingFood.calories * Math.max(Number.parseFloat(servingSize) || 1, 0.25))} kcal
+                    </div>
+                  </div>
+
+                  <p className="serving-card-base">
+                    Base serving: {addingFood.servingDescription}
+                  </p>
+
+                  <div className="serving-card-actions">
+                    <button
+                      onClick={() => void confirmAdd(addingFood)}
+                      disabled={savingFood}
+                      className="serving-card-primary"
+                    >
+                      {savingFood ? 'Saving...' : `Add to ${selectedMeal}`}
+                    </button>
+                    <button
+                      onClick={() => setAddingFood(null)}
+                      className="serving-card-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* ── Search results appear immediately below the search bar ── */}
               {searching && (
                 <div style={{ textAlign: 'center', padding: '24px 0' }}>
@@ -670,51 +839,6 @@ export default function FoodPage() {
                   <Flame size={28} style={{ color: '#2A2A2A', margin: '0 auto 10px' }} />
                   <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No foods found for &ldquo;{query}&rdquo;</p>
                   <p style={{ color: '#A0A0A0', fontSize: 13 }}>Try a more specific brand name or singular term like &ldquo;egg&rdquo;.</p>
-                </div>
-              )}
-
-              {/* Add serving size input when a food is selected */}
-              {addingFood && (
-                <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: '#252525', border: '1px solid #E8002D' }}>
-                  <p className="text-white font-semibold text-sm mb-1">{addingFood.name}</p>
-                  {addingFood.brand && (
-                    <p className="text-xs mb-1" style={{ color: '#A0A0A0' }}>{addingFood.brand}</p>
-                  )}
-                  <p className="text-xs mb-3" style={{ color: '#A0A0A0' }}>Adding to: {selectedMeal}</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="text-xs mb-1 block" style={{ color: '#A0A0A0' }}>Number of servings</label>
-                      <input
-                        type="number"
-                        value={servingSize}
-                        onChange={e => setServingSize(e.target.value)}
-                        min="0.25"
-                        step="0.25"
-                        style={{ backgroundColor: '#1E1E1E', border: '0.5px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: 6, padding: '8px 12px', width: '100%', outline: 'none', fontSize: 14 }}
-                      />
-                    </div>
-                    <div style={{ color: '#A0A0A0', fontSize: 13, marginTop: 20 }}>
-                      ~{Math.round(addingFood.calories * Math.max(Number.parseFloat(servingSize) || 1, 0.25))} kcal
-                    </div>
-                  </div>
-                  <p className="text-xs mt-2" style={{ color: '#A0A0A0' }}>
-                    Base serving: {addingFood.servingDescription}
-                  </p>
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => void confirmAdd(addingFood)}
-                      disabled={savingFood}
-                      style={{ backgroundColor: '#E8002D', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      {savingFood ? 'Saving...' : `Add to ${selectedMeal}`}
-                    </button>
-                    <button
-                      onClick={() => setAddingFood(null)}
-                      style={{ backgroundColor: '#2A2A2A', color: '#A0A0A0', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
                 </div>
               )}
 
