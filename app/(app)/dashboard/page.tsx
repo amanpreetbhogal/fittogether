@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Flame, Dumbbell, Target, Zap } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Label } from 'recharts'
 import StatCard from '@/components/StatCard'
 import NudgeButton from '@/components/NudgeButton'
 import { useAuth } from '@/components/auth/AuthProvider'
@@ -452,9 +452,17 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={weeklyWorkoutData} barGap={4}>
+              <BarChart data={weeklyWorkoutData} barGap={4} margin={{ top: 8, right: 8, bottom: 0, left: 12 }}>
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} width={54}>
+                  <Label
+                    value="Minutes"
+                    angle={-90}
+                    position="insideLeft"
+                    offset={-6}
+                    style={{ fill: '#A0A0A0', fontSize: 12, fontWeight: 600 }}
+                  />
+                </YAxis>
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                 <Bar dataKey="you" name="You" fill="#ffffff" radius={[4, 4, 0, 0]} />
                 {partnerProfile ? <Bar dataKey="partner" name={partnerFirstName} fill="#E8002D" radius={[4, 4, 0, 0]} /> : null}
@@ -480,9 +488,17 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={nutritionData}>
+              <LineChart data={nutritionData} margin={{ top: 8, right: 8, bottom: 0, left: 18 }}>
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} width={64}>
+                  <Label
+                    value="Calories"
+                    angle={-90}
+                    position="insideLeft"
+                    offset={-10}
+                    style={{ fill: '#A0A0A0', fontSize: 12, fontWeight: 600 }}
+                  />
+                </YAxis>
                 <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1 }} />
                 <Line type="monotone" dataKey="you" name="You" stroke="#ffffff" strokeWidth={2} dot={{ fill: '#ffffff', r: 4 }} activeDot={{ fill: '#ffffff', r: 6 }} />
                 {partnerProfile ? (
